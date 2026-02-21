@@ -2,8 +2,7 @@ import 'package:flutter/material.dart';
 import 'wallet_service.dart';
 import 'storage_service.dart';
 import 'package:qr_flutter/qr_flutter.dart';
-import 'dart:convert';
-import 'dart:html' as html;
+import 'package:web/web.dart' as web;
 
 void main() {
   runApp(const S256WebWallet());
@@ -25,7 +24,6 @@ class S256WebWallet extends StatelessWidget {
           primary: const Color(0xFFa300ff),
           secondary: const Color(0xFFffd700),
           surface: const Color(0xFF1a1f2e),
-          background: const Color(0xFF0b0f14),
         ),
       ),
       home: const WalletHome(),
@@ -45,7 +43,6 @@ class _WalletHomeState extends State<WalletHome> {
   final StorageService _storage = StorageService();
 
   final TextEditingController _privateKeyController = TextEditingController();
-  final TextEditingController _passwordController = TextEditingController();
   final TextEditingController _toAddressController = TextEditingController();
   final TextEditingController _amountController = TextEditingController();
 
@@ -58,10 +55,6 @@ class _WalletHomeState extends State<WalletHome> {
   late String _rpcUrl;
   late String _rpcUser;
   late String _rpcPassword;
-
-  String _decodeConfig(String encoded) {
-    return String.fromCharCodes(base64Decode(encoded));
-  }
 
   @override
   void initState() {
@@ -262,7 +255,7 @@ class _WalletHomeState extends State<WalletHome> {
       children: [
         Center(
           child: GestureDetector(
-            onTap: () => html.window.open('https://sha256coin.eu/', '_blank'),
+            onTap: () => web.window.open('https://sha256coin.eu/', '_blank'),
             child: MouseRegion(
               cursor: SystemMouseCursors.click,
               child: Image.asset(
@@ -297,13 +290,13 @@ class _WalletHomeState extends State<WalletHome> {
           decoration: BoxDecoration(
             gradient: LinearGradient(
               colors: [
-                Color(0xFFa300ff).withOpacity(0.2),
-                Color(0xFF00d4ff).withOpacity(0.2),
+                Color(0xFFa300ff).withValues(alpha: 0.2),
+                Color(0xFF00d4ff).withValues(alpha: 0.2),
               ],
             ),
             borderRadius: BorderRadius.circular(20),
             border: Border.all(
-              color: Color(0xFFa300ff).withOpacity(0.3),
+              color: Color(0xFFa300ff).withValues(alpha: 0.3),
               width: 1,
             ),
           ),
@@ -428,7 +421,7 @@ class _WalletHomeState extends State<WalletHome> {
                               Container(
                                 padding: const EdgeInsets.all(16),
                                 decoration: BoxDecoration(
-                                  color: Colors.red.withOpacity(0.2),
+                                  color: Colors.red.withValues(alpha: 0.2),
                                   border: Border.all(color: Colors.red, width: 2),
                                   borderRadius: BorderRadius.circular(8),
                                 ),
@@ -607,8 +600,8 @@ class _WalletHomeState extends State<WalletHome> {
         Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: Colors.orange.withOpacity(0.1),
-            border: Border.all(color: Colors.orange.withOpacity(0.3)),
+            color: Colors.orange.withValues(alpha: 0.1),
+            border: Border.all(color: Colors.orange.withValues(alpha: 0.3)),
             borderRadius: BorderRadius.circular(12),
           ),
           child: Column(
@@ -626,7 +619,7 @@ class _WalletHomeState extends State<WalletHome> {
               SizedBox(height: 8),
               Text(
                 'This is a client-side wallet. Your private key is stored only in your browser session and is cleared when you close the tab. For better security, use a hardware wallet or desktop client.',
-                style: TextStyle(color: Colors.orange.withOpacity(0.9), fontSize: 13),
+                style: TextStyle(color: Colors.orange.withValues(alpha: 0.9), fontSize: 13),
                 textAlign: TextAlign.center,
               ),
             ],
@@ -683,23 +676,13 @@ class _WalletHomeState extends State<WalletHome> {
     );
   }
 
-  Widget _buildFeature(IconData icon, String text) {
-    return Row(
-      children: [
-        Icon(icon, color: Color(0xFFa300ff), size: 16),
-        SizedBox(width: 8),
-        Text(text, style: TextStyle(fontSize: 13, color: Colors.white70)),
-      ],
-    );
-  }
-
   Widget _buildMessage() {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: _message.contains('Error') || _message.contains('Invalid')
-            ? Colors.red.withOpacity(0.2)
-            : Colors.green.withOpacity(0.2),
+            ? Colors.red.withValues(alpha: 0.2)
+            : Colors.green.withValues(alpha: 0.2),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Text(
