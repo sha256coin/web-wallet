@@ -334,10 +334,10 @@ Future<Map<String, String>?> getWalletFromMnemonic(String mnemonic) async {
     if (blockchainInfo == null) return null;
 
     return {
-      'blocks': blockchainInfo?['result']?['blocks'],
-      'difficulty': blockchainInfo?['result']?['difficulty'],
-      'bestblockhash': blockchainInfo?['result']?['bestblockhash'],
-      'mediantime': blockchainInfo?['result']?['mediantime'],
+      'blocks': blockchainInfo['result']?['blocks'],
+      'difficulty': blockchainInfo['result']?['difficulty'],
+      'bestblockhash': blockchainInfo['result']?['bestblockhash'],
+      'mediantime': blockchainInfo['result']?['mediantime'],
       'version': networkInfo?['result']?['version'],
       'subversion': networkInfo?['result']?['subversion'],
       'connections': networkInfo?['result']?['connections'],

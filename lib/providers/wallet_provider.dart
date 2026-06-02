@@ -34,13 +34,6 @@ class WalletProvider with ChangeNotifier {
     }
   }
 
-  void _tryRestoreSession() async {
-    final sessionWif = _storage.loadSession();
-    if (sessionWif != null) {
-      loadWifWallet(sessionWif);
-    }
-  }
-
   void clearMessage() {
     _message = '';
     notifyListeners();
