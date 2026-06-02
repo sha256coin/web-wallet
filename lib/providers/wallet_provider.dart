@@ -52,7 +52,7 @@ class WalletProvider with ChangeNotifier {
     _message = '⏳ Loading wallet...';
     notifyListeners();
 
-    await Future.delayed(const Duration(milliseconds: 100));
+    await Future.delayed(const Duration(milliseconds: 500));
 
     final address = _walletService.getAddressFromWif(wif);
     if (address == null) {
@@ -157,7 +157,7 @@ class WalletProvider with ChangeNotifier {
     notifyListeners();
 
     // Give the UI a moment to render the spinner
-    await Future.delayed(const Duration(milliseconds: 100));
+    await Future.delayed(const Duration(milliseconds: 500));
 
     final walletData = await _walletService.getWalletFromMnemonic(mnemonic);
     if (walletData == null) {
@@ -197,7 +197,7 @@ class WalletProvider with ChangeNotifier {
     _message = '⏳ Generating wallet...';
     notifyListeners();
 
-    await Future.delayed(const Duration(milliseconds: 100));
+    await Future.delayed(const Duration(milliseconds: 500));
 
     final walletData = _walletService.generateNewWallet();
     final address = walletData['address']!;
@@ -221,7 +221,7 @@ class WalletProvider with ChangeNotifier {
     _message = '⏳ Generating $words-word seed phrase...';
     notifyListeners();
 
-    await Future.delayed(const Duration(milliseconds: 100));
+    await Future.delayed(const Duration(milliseconds: 500));
 
     final walletData = await _walletService.generateNewSeedWallet(words: words);
     final mnemonic = walletData['mnemonic']!;
@@ -247,6 +247,8 @@ class WalletProvider with ChangeNotifier {
     _isLoading = true;
     _message = '⏳ Generating new seed phrase...';
     notifyListeners();
+
+    await Future.delayed(const Duration(milliseconds: 500));
 
     // 1. Generate new seed wallet
     final oldWif = _wallet!.privateKey;
