@@ -157,11 +157,14 @@ Future<Map<String, String>?> getWalletFromMnemonic(String mnemonic) async {
     String method,
     [List<dynamic>? params]
   ) async {
-    final auth = 'Basic ${base64Encode(utf8.encode('$rpcUser:$rpcPassword'))}';
     final headers = <String, String>{
       'Content-Type': 'application/json',
-      'Authorization': auth,
     };
+
+    if (rpcUser.isNotEmpty || rpcPassword.isNotEmpty) {
+      final auth = 'Basic ${base64Encode(utf8.encode('$rpcUser:$rpcPassword'))}';
+      headers['Authorization'] = auth;
+    }
 
     final body = jsonEncode({
       'jsonrpc': '1.0',
