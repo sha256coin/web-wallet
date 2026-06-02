@@ -23,7 +23,6 @@ class WalletProvider with ChangeNotifier {
 
   WalletProvider() {
     _loadRpcConfig();
-    _tryRestoreSession();
   }
 
   void _loadRpcConfig() {
@@ -101,20 +100,11 @@ class WalletProvider with ChangeNotifier {
     _message = '⏳ Sending transaction...';
     notifyListeners();
 
-    // Fetch key directly from session to ensure raw WIF is used
-    final rawWif = _storage.loadSession();
-    if (rawWif == null) {
-      _message = '❌ Session expired, please reload.';
-      _isLoading = false;
-      notifyListeners();
-      return false;
-    }
-
     final result = await _walletService.sendTransaction(
       _rpcUrl,
       _rpcUser,
       _rpcPassword,
-      rawWif,
+      _wallet!.privateKey,
       _wallet!.address,
       toAddress,
       amount,
