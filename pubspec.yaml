@@ -12,9 +12,10 @@ dependencies:
 
   # Core crypto libraries (web compatible)
   pointycastle: ^3.9.1
-  crypto: ^3.0.1
+  crypto: ^3.0.7
   bech32: ^0.2.2
   bip32: ^2.0.0
+  bip39: ^1.0.6
   http: ^1.2.2
   hex: ^0.2.0
   base_x: ^2.0.1

@@ -7,6 +7,7 @@ import 'package:bip32/bip32.dart' as bip32;
 import 'package:crypto/crypto.dart';
 import 'package:bech32/bech32.dart';
 import 'package:base_x/base_x.dart';
+import 'package:bip39/bip39.dart' as bip39;
 
 class WalletService {
   final BaseXCodec base58 = BaseXCodec('123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz');
@@ -30,6 +31,33 @@ class WalletService {
       'address': address ?? '',
     };
   }
+
+  // Generate a new Seed Phrase wallet
+  Future<Map<String, String>> generateNewSeedWallet({int words = 12}) async {
+    final int strength = words == 24 ? 256 : 128;
+    final mnemonic = bip39.generateMnemonic(strength: strength);
+    return (await getWalletFromMnemonic(mnemonic))!;
+  }
+
+Future<Map<String, String>?> getWalletFromMnemonic(String mnemonic) async {
+  if (!bip39.validateMnemonic(mnemonic)) return null;
+
+  final seed = await bip39.mnemonicToSeed(mnemonic);
+  final root = bip32.BIP32.fromSeed(seed);
+  
+  final child = root.derivePath("m/44'/0'/0'/0/0");
+  final privateKey = child.privateKey!;
+  
+  final wif = _privateKeyToWif(privateKey);
+  
+  final address = getAddressFromWif(wif);
+
+  return {
+    'mnemonic': mnemonic,
+    'privateKey': wif,
+    'address': address ?? '',
+  };
+}
 
   // Convert private key to WIF
   String _privateKeyToWif(Uint8List privateKey) {
@@ -129,13 +157,11 @@ class WalletService {
     String method,
     [List<dynamic>? params]
   ) async {
-    final headers = <String, String>{'Content-Type': 'application/json'};
-
-    // Only add Authorization header if credentials are provided
-    if (rpcUser.isNotEmpty && rpcPassword.isNotEmpty) {
-      final auth = 'Basic ${base64Encode(utf8.encode('$rpcUser:$rpcPassword'))}';
-      headers['Authorization'] = auth;
-    }
+    final auth = 'Basic ${base64Encode(utf8.encode('$rpcUser:$rpcPassword'))}';
+    final headers = <String, String>{
+      'Content-Type': 'application/json',
+      'Authorization': auth,
+    };
 
     final body = jsonEncode({
       'jsonrpc': '1.0',
@@ -288,6 +314,33 @@ class WalletService {
     return {
       'success': false,
       'message': 'Insufficient funds. Available balance: ${inputSum.toStringAsFixed(8)} S256. If you have recent deposits, please wait approximately 20 minutes for confirmation.'
+    };
+  }
+
+  // Get network info
+  Future<Map<String, dynamic>?> getNetworkInfo(
+    String rpcUrl,
+    String rpcUser,
+    String rpcPassword,
+  ) async {
+    final blockchainInfo = await rpcRequest(rpcUrl, rpcUser, rpcPassword, 'getblockchaininfo');
+    final networkInfo = await rpcRequest(rpcUrl, rpcUser, rpcPassword, 'getnetworkinfo');
+    final mempoolInfo = await rpcRequest(rpcUrl, rpcUser, rpcPassword, 'getmempoolinfo');
+    final miningInfo = await rpcRequest(rpcUrl, rpcUser, rpcPassword, 'getmininginfo');
+
+    if (blockchainInfo == null) return null;
+
+    return {
+      'blocks': blockchainInfo?['result']?['blocks'],
+      'difficulty': blockchainInfo?['result']?['difficulty'],
+      'bestblockhash': blockchainInfo?['result']?['bestblockhash'],
+      'mediantime': blockchainInfo?['result']?['mediantime'],
+      'version': networkInfo?['result']?['version'],
+      'subversion': networkInfo?['result']?['subversion'],
+      'connections': networkInfo?['result']?['connections'],
+      'mempool_size': mempoolInfo?['result']?['size'],
+      'mempool_bytes': mempoolInfo?['result']?['bytes'],
+      'networkhashps': miningInfo?['result']?['networkhashps'],
     };
   }
 
