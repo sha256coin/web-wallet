@@ -235,33 +235,55 @@ Future<Map<String, String>?> getWalletFromMnemonic(String mnemonic) async {
       return {'success': false, 'message': 'No confirmed funds available. Please wait approximately 20 minutes for your deposit to confirm.'};
     }
 
+    final totalAvailable = utxos.fold(0.0, (sum, utxo) => sum + (utxo['amount'] as double));
+    final bool isSweep = (amount >= totalAvailable - 0.00001);
+
     // Sort by amount (largest first)
     utxos.sort((a, b) => (b['amount'] as double).compareTo(a['amount'] as double));
 
     // Select UTXOs
     List<Map<String, dynamic>> selectedUtxos = [];
     double inputSum = 0.0;
-    const double feeRate = 0.00001;
 
-    for (var utxo in utxos) {
+    for (int i = 0; i < utxos.length; i++) {
+      final utxo = utxos[i];
       selectedUtxos.add({'txid': utxo['txid'], 'vout': utxo['vout']});
       inputSum += utxo['amount'];
 
+      // For sweep, we MUST use all UTXOs to ensure nothing is left behind
+      if (isSweep && i < utxos.length - 1) continue;
+
+      // Estimate fee
       final inputCount = selectedUtxos.length;
-      final outputCount = 2;
-      final txSize = 10 + (inputCount * 148) + (outputCount * 34);
-      final fee = (feeRate * txSize / 1000);
+      final txSize = 10 + (inputCount * 148) + (isSweep ? 1 : 2) * 34;
+      
+      double currentFeeRate = 0.00001;
+      try {
+        final feeResult = await rpcRequest(rpcUrl, rpcUser, rpcPassword, 'estimatesmartfee', [6]);
+        if (feeResult != null && feeResult['result'] != null && feeResult['result']['feerate'] != null) {
+          currentFeeRate = (feeResult['result']['feerate'] as num).toDouble();
+        }
+      } catch (_) {}
 
-      if (inputSum >= amount + fee) {
-        final actualFee = double.parse(fee.toStringAsFixed(8));
-        final change = double.parse((inputSum - amount - actualFee).toStringAsFixed(8));
+      final fee = (currentFeeRate * txSize / 1000);
+      final actualFee = double.parse(fee.toStringAsFixed(8));
 
-        final outputs = <String, dynamic>{
-          toAddress: double.parse(amount.toStringAsFixed(8)),
-        };
-
-        if (change > 0.00000546) {
-          outputs[fromAddress] = change;
+      // Check if we have enough
+      if (inputSum >= (isSweep ? actualFee : amount + actualFee)) {
+        final Map<String, dynamic> outputs = {};
+        
+        if (isSweep) {
+          final sweepAmount = double.parse((inputSum - actualFee).toStringAsFixed(8));
+          if (sweepAmount <= 0.00000546) {
+             return {'success': false, 'message': 'Balance too low to cover transaction fees.'};
+          }
+          outputs[toAddress] = sweepAmount;
+        } else {
+          final change = double.parse((inputSum - amount - actualFee).toStringAsFixed(8));
+          outputs[toAddress] = double.parse(amount.toStringAsFixed(8));
+          if (change > 0.00000546) {
+            outputs[fromAddress] = change;
+          }
         }
 
         // Create raw transaction
@@ -306,7 +328,6 @@ Future<Map<String, String>?> getWalletFromMnemonic(String mnemonic) async {
         }
 
         final errorMessage = sendResult?['error']?['message'] ?? 'Unknown error';
-        // Check for common errors and provide better messages
         if (errorMessage.contains('insufficient fee') || errorMessage.contains('rejecting replacement')) {
           return {'success': false, 'message': 'You have a pending transaction. Please wait approximately 20 minutes before sending another transaction.'};
         }

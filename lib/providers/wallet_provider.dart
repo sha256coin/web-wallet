@@ -280,7 +280,10 @@ class WalletProvider with ChangeNotifier {
       ? '✅ Migration successful! Funds swept.' 
       : '✅ Migration successful! (Empty wallet)';
     notifyListeners();
-    await refreshBalance();
+    
+    // Refresh balance in background so modal can show immediately
+    refreshBalance();
+    
     return true;
   }
 }
