@@ -121,6 +121,12 @@ class _SetupScreenState extends State<SetupScreen> {
                     textAlign: TextAlign.center,
                   ),
                 ],
+                const SizedBox(height: 40),
+                const Text(
+                  'S256 Web-Wallet version 2.1',
+                  style: TextStyle(color: Colors.white54, fontSize: 14),
+                  textAlign: TextAlign.center,
+                ),
               ],
             ),
           ),
@@ -148,6 +154,10 @@ class _SetupScreenState extends State<SetupScreen> {
                 hintText: widget.useSeed 
                   ? 'Enter your 12 or 24 word seed phrase...'
                   : 'Enter your WIF private key...',
+                helperText: widget.useSeed 
+                  ? null 
+                  : 'Note: Only S256 network WIF keys are supported.',
+                helperStyle: const TextStyle(color: Colors.orangeAccent, fontSize: 12),
               ),
             ),
             const SizedBox(height: 24),

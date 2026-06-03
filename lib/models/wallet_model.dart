@@ -6,6 +6,8 @@ class WalletModel {
   final String? mnemonic;
   final WalletType type;
   final double balance;
+  final double unconfirmedBalance;
+  final bool isPending;
 
   WalletModel({
     required this.address,
@@ -13,7 +15,12 @@ class WalletModel {
     this.mnemonic,
     required this.type,
     this.balance = 0.0,
+    this.unconfirmedBalance = 0.0,
+    this.isPending = false,
   });
+
+  bool get hasPending => isPending || unconfirmedBalance != 0;
+  double get totalBalance => balance + unconfirmedBalance;
 
   WalletModel copyWith({
     String? address,
@@ -21,6 +28,8 @@ class WalletModel {
     String? mnemonic,
     WalletType? type,
     double? balance,
+    double? unconfirmedBalance,
+    bool? isPending,
   }) {
     return WalletModel(
       address: address ?? this.address,
@@ -28,6 +37,8 @@ class WalletModel {
       mnemonic: mnemonic ?? this.mnemonic,
       type: type ?? this.type,
       balance: balance ?? this.balance,
+      unconfirmedBalance: unconfirmedBalance ?? this.unconfirmedBalance,
+      isPending: isPending ?? this.isPending,
     );
   }
 }

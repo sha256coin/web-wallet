@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:qr_flutter/qr_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../providers/wallet_provider.dart';
 import '../theme/app_theme.dart';
 import '../models/wallet_model.dart';
@@ -104,12 +105,12 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
     return Material(
       color: Colors.black.withValues(alpha: 0.2),
       child: Container(
-        width: 260,
+        width: 280,
         padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Image.asset('assets/logo.png', height: 40),
+            Image.asset('assets/logo.png', height: 220),
             const SizedBox(height: 60),
             _buildSidebarItem(0, Icons.account_balance_wallet_rounded, 'Assets'),
             _buildSidebarItem(1, Icons.send_rounded, 'Send'),
@@ -118,15 +119,20 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
             const Spacer(),
             const Padding(
               padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: Text('Support', style: TextStyle(color: Colors.white38, fontSize: 12)),
+              child: Text('Support', style: TextStyle(color: Colors.white38, fontSize: 14)),
             ),
             ListTile(
               leading: const Icon(Icons.email_rounded, size: 18, color: Colors.white38),
-              title: const Text('info@sha256coin.eu', style: TextStyle(fontSize: 12, color: Colors.white54)),
+              title: const Text('info@sha256coin.eu', style: TextStyle(fontSize: 14, color: Colors.white54)),
             ),
             ListTile(
               leading: const Icon(Icons.support_agent_rounded, size: 18, color: Colors.white38),
-              title: const Text('contact@sha256coin.eu', style: TextStyle(fontSize: 12, color: Colors.white54)),
+              title: const Text('contact@sha256coin.eu', style: TextStyle(fontSize: 14, color: Colors.white54)),
+            ),
+            const SizedBox(height: 10),
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 16),
+              child: Text('S256 Web-Wallet version 2.1', style: TextStyle(color: Colors.white54, fontSize: 12)),
             ),
             const SizedBox(height: 20),
             ListTile(
@@ -241,15 +247,17 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
       width: double.infinity,
       padding: const EdgeInsets.all(32),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [AppTheme.primaryColor, AppTheme.accentColor],
+        gradient: LinearGradient(
+          colors: wallet.hasPending 
+            ? [Colors.orange.shade800, Colors.orange.shade600] 
+            : [AppTheme.primaryColor, AppTheme.accentColor],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
         borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
-            color: AppTheme.primaryColor.withValues(alpha: 0.3),
+            color: (wallet.hasPending ? Colors.orange : AppTheme.primaryColor).withValues(alpha: 0.3),
             blurRadius: 30,
             offset: const Offset(0, 15),
           ),
@@ -258,12 +266,46 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Total Balance', style: TextStyle(color: Colors.white70, fontSize: 16)),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text('Total Balance', style: TextStyle(color: Colors.white70, fontSize: 16)),
+              if (wallet.hasPending)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.2),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: const Row(
+                    children: [
+                      Icon(Icons.history_toggle_off_rounded, color: Colors.white, size: 14),
+                      SizedBox(width: 6),
+                      Text(
+                        'PENDING',
+                        style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                      ),
+                    ],
+                  ),
+                ),
+            ],
+          ),
           const SizedBox(height: 8),
           Text(
-            '${wallet.balance.toStringAsFixed(8)} S256',
+            '${wallet.totalBalance.toStringAsFixed(8)} S256',
             style: const TextStyle(fontSize: 40, fontWeight: FontWeight.bold, color: Colors.white),
           ),
+          if (wallet.hasPending) ...[
+            const SizedBox(height: 8),
+            Text(
+              'Confirmed: ${wallet.balance.toStringAsFixed(8)} S256',
+              style: const TextStyle(color: Colors.white70, fontSize: 14),
+            ),
+            const Text(
+              'Note: You have unconfirmed transactions. Please wait ~20 min for a block.',
+              style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w500),
+            ),
+          ],
           const SizedBox(height: 24),
           Row(
             children: [
@@ -353,11 +395,12 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
 
   void _showMigrationDialog(BuildContext context, WalletProvider provider) {
     final isEmpty = provider.wallet!.balance <= 0.00001;
+    final dashboardContext = context;
 
     showDialog(
-      context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
+      context: dashboardContext,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (statefulContext, setDialogState) => AlertDialog(
           title: Text(isEmpty ? 'Switch to Seed Phrase' : 'Confirm Migration'),
           content: Column(
             mainAxisSize: MainAxisSize.min,
@@ -396,15 +439,15 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(context),
+              onPressed: () => Navigator.pop(dialogContext),
               child: const Text('Cancel'),
             ),
             ElevatedButton(
               onPressed: () async {
-                Navigator.pop(context);
+                Navigator.pop(dialogContext);
                 final success = await provider.migrateToSeed(words: _migrationSeedWords);
-                if (success && context.mounted) {
-                  _showBackupDialog(context, provider);
+                if (success && dashboardContext.mounted) {
+                  _showBackupDialog(dashboardContext, provider);
                 }
               },
               style: ElevatedButton.styleFrom(
@@ -551,20 +594,24 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
           subtitle: const Text('View your seed phrase or private key'),
           trailing: const Icon(Icons.security_rounded),
         ),
-        const Divider(),
         const SizedBox(height: 20),
-        const Text('Support', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white54)),
+        const Text('Links', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white54)),
         const SizedBox(height: 10),
         ListTile(
-          leading: const Icon(Icons.email_rounded, color: AppTheme.accentColor),
-          title: const Text('Information'),
-          subtitle: const Text('info@sha256coin.eu'),
+          onTap: () => launchUrl(Uri.parse('https://sha256coin.eu/')),
+          leading: const Icon(Icons.language_rounded, color: AppTheme.primaryColor),
+          title: const Text('Official Website'),
+          subtitle: const Text('sha256coin.eu'),
+          trailing: const Icon(Icons.open_in_new_rounded, size: 18, color: Colors.white24),
         ),
         ListTile(
-          leading: const Icon(Icons.support_agent_rounded, color: AppTheme.accentColor),
-          title: const Text('Contact'),
-          subtitle: const Text('contact@sha256coin.eu'),
+          onTap: () => launchUrl(Uri.parse('https://sha256coin.eu/explorer')),
+          leading: const Icon(Icons.search_rounded, color: AppTheme.primaryColor),
+          title: const Text('Block Explorer'),
+          subtitle: const Text('Check transactions and blocks'),
+          trailing: const Icon(Icons.open_in_new_rounded, size: 18, color: Colors.white24),
         ),
+        const Divider(),
         const SizedBox(height: 40),
         ElevatedButton(
           onPressed: provider.logout,
@@ -608,6 +655,11 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                 decoration: BoxDecoration(color: Colors.black26, borderRadius: BorderRadius.circular(8)),
                 child: SelectableText(wallet.mnemonic ?? 'N/A', style: const TextStyle(fontFamily: 'monospace')),
               ),
+              const SizedBox(height: 12),
+              const Text(
+                'The Seed Phrase above recovers your entire wallet, including all future addresses.',
+                style: TextStyle(color: Colors.white54, fontSize: 12, fontStyle: FontStyle.italic),
+              ),
               const SizedBox(height: 20),
             ],
             Row(
@@ -630,6 +682,13 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
               decoration: BoxDecoration(color: Colors.black26, borderRadius: BorderRadius.circular(8)),
               child: SelectableText(wallet.privateKey, style: const TextStyle(fontFamily: 'monospace')),
             ),
+            if (wallet.type == WalletType.seed) ...[
+              const SizedBox(height: 12),
+              const Text(
+                'This WIF key is derived from your seed and controls ONLY the current address. The Seed Phrase is the primary backup.',
+                style: TextStyle(color: Colors.white54, fontSize: 12, fontStyle: FontStyle.italic),
+              ),
+            ],
           ],
         ),
         actions: [

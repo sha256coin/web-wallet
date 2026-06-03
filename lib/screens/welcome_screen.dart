@@ -28,7 +28,7 @@ class WelcomeScreen extends StatelessWidget {
               children: [
                 Hero(
                   tag: 'logo',
-                  child: Image.asset('assets/logo.png', height: 120),
+                  child: Image.asset('assets/logo.png', height: 200),
                 ),
                 const SizedBox(height: 24),
                 const Text(
@@ -76,7 +76,13 @@ class WelcomeScreen extends StatelessWidget {
                 const SizedBox(height: 40),
                 const Text(
                   'Your keys never leave your browser.',
-                  style: TextStyle(color: Colors.white38, fontSize: 12),
+                  style: TextStyle(color: Colors.white38, fontSize: 14),
+                ),
+                const SizedBox(height: 40),
+                const Text(
+                  'S256 Web-Wallet version 2.1',
+                  style: TextStyle(color: Colors.white54, fontSize: 12),
+                  textAlign: TextAlign.center,
                 ),
               ],
             ),

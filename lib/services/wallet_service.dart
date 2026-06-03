@@ -23,32 +23,32 @@ class WalletService {
       privateKeyBytes[i] = random.nextInt(256);
     }
 
-    final wif = _privateKeyToWif(privateKeyBytes);
+    final wif = privateKeyToWif(privateKeyBytes);
     final address = getAddressFromWif(wif);
 
     return {
       'privateKey': wif,
       'address': address ?? '',
     };
-  }
+    }
 
-  // Generate a new Seed Phrase wallet
-  Future<Map<String, String>> generateNewSeedWallet({int words = 12}) async {
+    // Generate a new Seed Phrase wallet
+    Future<Map<String, String>> generateNewSeedWallet({int words = 12}) async {
     final int strength = words == 24 ? 256 : 128;
     final mnemonic = bip39.generateMnemonic(strength: strength);
     return (await getWalletFromMnemonic(mnemonic))!;
-  }
+    }
 
-Future<Map<String, String>?> getWalletFromMnemonic(String mnemonic) async {
-  if (!bip39.validateMnemonic(mnemonic)) return null;
+    Future<Map<String, String>?> getWalletFromMnemonic(String mnemonic) async {
+    if (!bip39.validateMnemonic(mnemonic)) return null;
 
-  final seed = await bip39.mnemonicToSeed(mnemonic);
-  final root = bip32.BIP32.fromSeed(seed);
-  
-  final child = root.derivePath("m/44'/0'/0'/0/0");
-  final privateKey = child.privateKey!;
-  
-  final wif = _privateKeyToWif(privateKey);
+    final seed = await bip39.mnemonicToSeed(mnemonic);
+    final root = bip32.BIP32.fromSeed(seed);
+
+    final child = root.derivePath("m/44'/0'/0'/0/0");
+    final privateKey = child.privateKey!;
+
+    final wif = privateKeyToWif(privateKey);
   
   final address = getAddressFromWif(wif);
 
@@ -60,7 +60,7 @@ Future<Map<String, String>?> getWalletFromMnemonic(String mnemonic) async {
 }
 
   // Convert private key to WIF
-  String _privateKeyToWif(Uint8List privateKey) {
+  String privateKeyToWif(Uint8List privateKey) {
     final extended = Uint8List(1 + privateKey.length + 1);
     extended[0] = networkPrefix;
     extended.setRange(1, 1 + privateKey.length, privateKey);
@@ -77,7 +77,7 @@ Future<Map<String, String>?> getWalletFromMnemonic(String mnemonic) async {
   // Get address from WIF private key
   String? getAddressFromWif(String wifPrivateKey) {
     try {
-      final privateKey = _wifToPrivateKey(wifPrivateKey);
+      final privateKey = wifToPrivateKey(wifPrivateKey);
       final node = bip32.BIP32.fromPrivateKey(privateKey, Uint8List(32));
       final pubKey = node.publicKey;
       final pubKeyHash = _pubKeyToP2WPKH(pubKey);
@@ -87,7 +87,7 @@ Future<Map<String, String>?> getWalletFromMnemonic(String mnemonic) async {
     }
   }
 
-  Uint8List _wifToPrivateKey(String wif) {
+  Uint8List wifToPrivateKey(String wif) {
     final bytes = base58.decode(wif);
     final keyWithChecksum = bytes.sublist(0, bytes.length - 4);
     final checksum = bytes.sublist(bytes.length - 4);
@@ -95,6 +95,10 @@ Future<Map<String, String>?> getWalletFromMnemonic(String mnemonic) async {
     final calculatedChecksum = _calculateChecksum(keyWithChecksum);
     if (!_listEquals(checksum, calculatedChecksum)) {
       throw Exception('Invalid WIF checksum');
+    }
+
+    if (keyWithChecksum[0] != networkPrefix) {
+      throw Exception('Incompatible WIF prefix: 0x${keyWithChecksum[0].toRadixString(16).toUpperCase()}. S256 uses 0x${networkPrefix.toRadixString(16).toUpperCase()} (Check your WIF prefix and ensure you are using a compatible wallet).');
     }
 
     return Uint8List.fromList(keyWithChecksum.sublist(
@@ -193,29 +197,116 @@ Future<Map<String, String>?> getWalletFromMnemonic(String mnemonic) async {
     String rpcPassword,
     String address,
   ) async {
+    // 1. Get confirmed UTXOs from the chain
     final result = await rpcRequest(rpcUrl, rpcUser, rpcPassword, 'scantxoutset', [
       'start',
       [{'desc': 'addr($address)'}]
     ]);
 
-    if (result == null || result['result'] == null) return [];
-
-    final utxos = result['result']['unspents'] as List<dynamic>? ?? [];
-
-    // Get blockchain height for confirmations
-    final blockchainInfo = await rpcRequest(rpcUrl, rpcUser, rpcPassword, 'getblockchaininfo');
-    final currentHeight = blockchainInfo?['result']?['blocks'] ?? 0;
-
-    return utxos.map((utxo) {
-      int confirmations = 0;
-      if (utxo['height'] != null && utxo['height'] > 0) {
-        confirmations = currentHeight - utxo['height'] + 1;
+    final List<Map<String, dynamic>> confirmedUtxos = [];
+    if (result != null && result['result'] != null) {
+      final unspents = result['result']['unspents'] as List<dynamic>? ?? [];
+      for (var u in unspents) {
+        confirmedUtxos.add({
+          'txid': u['txid'],
+          'vout': u['vout'],
+          'amount': (u['amount'] as num).toDouble(),
+          'height': u['height'],
+          'confirmations': 1,
+        });
       }
-      return {
-        ...utxo as Map<String, dynamic>,
-        'confirmations': confirmations,
-      };
-    }).where((utxo) => utxo['confirmations'] > 0).toList();
+    }
+
+    // 2. Get mempool txids (try RPC first, fallback to Explorer API)
+    final List<Map<String, dynamic>> decodedMempool = [];
+    bool rpcMempoolSucceeded = false;
+    final mempoolResult = await rpcRequest(rpcUrl, rpcUser, rpcPassword, 'getrawmempool', [false]);
+    
+    if (mempoolResult != null && mempoolResult['result'] != null) {
+      rpcMempoolSucceeded = true;
+      final List<dynamic> txids = mempoolResult['result'] as List<dynamic>;
+      for (var txid in txids) {
+        final rawTx = await rpcRequest(rpcUrl, rpcUser, rpcPassword, 'getrawtransaction', [txid, true]);
+        if (rawTx != null && rawTx['result'] != null) {
+          decodedMempool.add(rawTx['result'] as Map<String, dynamic>);
+        }
+      }
+    }
+
+    // Fallback: ONLY if RPC failed (not if mempool was just empty)
+    if (!rpcMempoolSucceeded) {
+      try {
+        final explorerResponse = await http.get(Uri.parse('https://sha256coin.eu/api/mempool'));
+        if (explorerResponse.statusCode == 200) {
+          final List<dynamic> explorerTxs = jsonDecode(explorerResponse.body)['transactions'];
+          for (var tx in explorerTxs) {
+            decodedMempool.add(tx as Map<String, dynamic>);
+          }
+        }
+      } catch (_) {}
+    }
+
+    final List<Map<String, dynamic>> finalUtxos = [];
+    bool hasMempoolActivity = false;
+
+    // 3. Process Decoded Mempool (Detect spends and incoming)
+    final spentInMempool = <String>{};
+    final incomingFromMempool = <Map<String, dynamic>>[];
+
+    for (var data in decodedMempool) {
+      final String txid = data['txid'] ?? '';
+      
+      // Check inputs (detect our coins being spent)
+      final vins = data['vin'] as List<dynamic>? ?? [];
+      for (var vin in vins) {
+        // Handle both RPC (txid/vout) and Explorer (prev_txid/prev_vout or similar) formats
+        final String? vinTxid = vin['txid'] ?? vin['prev_txid'];
+        final dynamic vinVout = vin['vout'] ?? vin['prev_vout'];
+        if (vinTxid != null && vinVout != null) {
+          spentInMempool.add('$vinTxid:$vinVout');
+        }
+      }
+
+      // Check outputs (detect new funds or change)
+      final vouts = data['vout'] as List<dynamic>? ?? [];
+      for (var vout in vouts) {
+        final scriptPubKey = vout['scriptPubKey'] as Map<String, dynamic>? ?? {};
+        final addresses = scriptPubKey['addresses'] as List<dynamic>? ?? [];
+        final String? singleAddr = scriptPubKey['address'] as String?;
+        
+        if (addresses.contains(address) || (singleAddr != null && singleAddr == address)) {
+          incomingFromMempool.add({
+            'txid': txid,
+            'vout': vout['n'] ?? 0,
+            'amount': (vout['value'] as num? ?? 0.0).toDouble(),
+            'confirmations': 0,
+          });
+          hasMempoolActivity = true;
+        }
+      }
+    }
+
+    // 4. Merge Confirmed and Mempool
+    for (var utxo in confirmedUtxos) {
+      final outpoint = '${utxo['txid']}:${utxo['vout']}';
+      if (spentInMempool.contains(outpoint)) {
+        hasMempoolActivity = true; // Flag that a confirmed coin is being spent
+      } else {
+        finalUtxos.add(utxo);
+      }
+    }
+    finalUtxos.addAll(incomingFromMempool);
+
+    // 5. Final Force-Yellow logic
+    if (hasMempoolActivity && !finalUtxos.any((u) => u['confirmations'] == 0)) {
+      finalUtxos.add({
+        'txid': 'pending_marker',
+        'amount': 0.0,
+        'confirmations': 0,
+      });
+    }
+
+    return finalUtxos;
   }
 
   // Send transaction
@@ -228,18 +319,28 @@ Future<Map<String, String>?> getWalletFromMnemonic(String mnemonic) async {
     String toAddress,
     double amount,
   ) async {
-    // Get UTXOs
-    final utxos = await getUtxos(rpcUrl, rpcUser, rpcPassword, fromAddress);
+    // Get UTXOs (Filter out pending marker)
+    final allUtxos = await getUtxos(rpcUrl, rpcUser, rpcPassword, fromAddress);
+    final utxos = allUtxos.where((u) => u['txid'] != 'pending_marker').toList();
 
     if (utxos.isEmpty) {
       return {'success': false, 'message': 'No confirmed funds available. Please wait approximately 20 minutes for your deposit to confirm.'};
     }
 
-    final totalAvailable = utxos.fold(0.0, (sum, utxo) => sum + (utxo['amount'] as double));
+    final totalAvailable = utxos.fold(0.0, (sum, utxo) => sum + (utxo['amount'] as num).toDouble());
     final bool isSweep = (amount >= totalAvailable - 0.00001);
 
     // Sort by amount (largest first)
-    utxos.sort((a, b) => (b['amount'] as double).compareTo(a['amount'] as double));
+    utxos.sort((a, b) => ((b['amount'] as num).toDouble()).compareTo((a['amount'] as num).toDouble()));
+
+    // Fetch fee rate once before the loop
+    double currentFeeRate = 0.00001;
+    try {
+      final feeResult = await rpcRequest(rpcUrl, rpcUser, rpcPassword, 'estimatesmartfee', [6]);
+      if (feeResult != null && feeResult['result'] != null && feeResult['result']['feerate'] != null) {
+        currentFeeRate = (feeResult['result']['feerate'] as num).toDouble();
+      }
+    } catch (_) {}
 
     // Select UTXOs
     List<Map<String, dynamic>> selectedUtxos = [];
@@ -248,7 +349,7 @@ Future<Map<String, String>?> getWalletFromMnemonic(String mnemonic) async {
     for (int i = 0; i < utxos.length; i++) {
       final utxo = utxos[i];
       selectedUtxos.add({'txid': utxo['txid'], 'vout': utxo['vout']});
-      inputSum += utxo['amount'];
+      inputSum += (utxo['amount'] as num).toDouble();
 
       // For sweep, we MUST use all UTXOs to ensure nothing is left behind
       if (isSweep && i < utxos.length - 1) continue;
@@ -256,14 +357,6 @@ Future<Map<String, String>?> getWalletFromMnemonic(String mnemonic) async {
       // Estimate fee
       final inputCount = selectedUtxos.length;
       final txSize = 10 + (inputCount * 148) + (isSweep ? 1 : 2) * 34;
-      
-      double currentFeeRate = 0.00001;
-      try {
-        final feeResult = await rpcRequest(rpcUrl, rpcUser, rpcPassword, 'estimatesmartfee', [6]);
-        if (feeResult != null && feeResult['result'] != null && feeResult['result']['feerate'] != null) {
-          currentFeeRate = (feeResult['result']['feerate'] as num).toDouble();
-        }
-      } catch (_) {}
 
       final fee = (currentFeeRate * txSize / 1000);
       final actualFee = double.parse(fee.toStringAsFixed(8));
@@ -370,6 +463,14 @@ Future<Map<String, String>?> getWalletFromMnemonic(String mnemonic) async {
 
   // Calculate balance from UTXOs
   double calculateBalance(List<Map<String, dynamic>> utxos) {
-    return utxos.fold(0.0, (sum, utxo) => sum + (utxo['amount'] as double? ?? 0.0));
+    return utxos
+        .where((utxo) => (utxo['confirmations'] as int) > 0)
+        .fold(0.0, (sum, utxo) => sum + (utxo['amount'] as num? ?? 0.0).toDouble());
+  }
+
+  double calculateUnconfirmedBalance(List<Map<String, dynamic>> utxos) {
+    return utxos
+        .where((utxo) => (utxo['confirmations'] as int) == 0)
+        .fold(0.0, (sum, utxo) => sum + (utxo['amount'] as num? ?? 0.0).toDouble());
   }
 }

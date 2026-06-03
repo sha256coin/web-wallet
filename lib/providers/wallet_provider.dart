@@ -10,6 +10,7 @@ class WalletProvider with ChangeNotifier {
   WalletModel? _wallet;
   bool _isLoading = false;
   String _message = '';
+  final Set<String> _localPendingTxs = {};
   
   // RPC Config
   String _rpcUrl = 'https://sha256coin.eu/rpc';
@@ -46,28 +47,38 @@ class WalletProvider with ChangeNotifier {
 
     await Future.delayed(const Duration(milliseconds: 500));
 
-    final address = _walletService.getAddressFromWif(wif);
-    if (address == null) {
-      _message = '❌ Invalid WIF Private Key';
+    try {
+      final address = _walletService.getAddressFromWif(wif);
+      if (address == null) {
+        _message = '❌ Invalid WIF Private Key';
+        _isLoading = false;
+        notifyListeners();
+        return;
+      }
+
+      final utxos = await _walletService.getUtxos(_rpcUrl, _rpcUser, _rpcPassword, address);
+      final balance = _walletService.calculateBalance(utxos);
+      final unconfirmed = _walletService.calculateUnconfirmedBalance(utxos);
+      final hasMempoolActivity = utxos.any((u) => u['confirmations'] == 0);
+
+      _wallet = WalletModel(
+        address: address,
+        privateKey: wif,
+        type: WalletType.wif,
+        balance: balance,
+        unconfirmedBalance: unconfirmed,
+        isPending: hasMempoolActivity,
+      );
+
+      _isLoading = false;
+      _message = '✅ Wallet loaded successfully!';
+      notifyListeners();
+    } catch (e) {
+      _message = '❌ ${e.toString().replaceAll('Exception: ', '')}';
       _isLoading = false;
       notifyListeners();
       return;
     }
-
-    final utxos = await _walletService.getUtxos(_rpcUrl, _rpcUser, _rpcPassword, address);
-    final balance = _walletService.calculateBalance(utxos);
-
-    _wallet = WalletModel(
-      address: address,
-      privateKey: wif,
-      type: WalletType.wif,
-      balance: balance,
-    );
-
-    _storage.saveSession(wif);
-    _isLoading = false;
-    _message = '✅ Wallet loaded successfully!';
-    notifyListeners();
     
     // Auto-clear success message
     Future.delayed(const Duration(seconds: 5), () {
@@ -81,8 +92,16 @@ class WalletProvider with ChangeNotifier {
 
     final utxos = await _walletService.getUtxos(_rpcUrl, _rpcUser, _rpcPassword, _wallet!.address);
     final balance = _walletService.calculateBalance(utxos);
+    final unconfirmed = _walletService.calculateUnconfirmedBalance(utxos);
+    
+    // Check if any UTXO is unconfirmed OR if we have the special 'pending_marker' flag
+    final hasMempoolActivity = utxos.any((u) => u['confirmations'] == 0 || u['txid'] == 'pending_marker');
 
-    _wallet = _wallet!.copyWith(balance: balance);
+    _wallet = _wallet!.copyWith(
+      balance: balance,
+      unconfirmedBalance: unconfirmed,
+      isPending: hasMempoolActivity || _localPendingTxs.isNotEmpty,
+    );
     notifyListeners();
   }
 
@@ -105,7 +124,10 @@ class WalletProvider with ChangeNotifier {
 
     _isLoading = false;
     if (result['success']) {
-      _message = '✅ Sent! TXID: ${result['txid']}';
+      final txid = result['txid'] as String;
+      _localPendingTxs.add(txid);
+      
+      _message = '✅ Sent! TXID: $txid';
       await refreshBalance();
       notifyListeners();
       
@@ -155,6 +177,8 @@ class WalletProvider with ChangeNotifier {
 
     final utxos = await _walletService.getUtxos(_rpcUrl, _rpcUser, _rpcPassword, address);
     final balance = _walletService.calculateBalance(utxos);
+    final unconfirmed = _walletService.calculateUnconfirmedBalance(utxos);
+    final hasMempoolActivity = utxos.any((u) => u['confirmations'] == 0);
 
     _wallet = WalletModel(
       address: address,
@@ -162,9 +186,10 @@ class WalletProvider with ChangeNotifier {
       mnemonic: mnemonic,
       type: WalletType.seed,
       balance: balance,
+      unconfirmedBalance: unconfirmed,
+      isPending: hasMempoolActivity,
     );
 
-    _storage.saveSession(wif); // We save WIF in session for signing
     _isLoading = false;
     _message = '✅ Wallet loaded successfully!';
     notifyListeners();
@@ -193,10 +218,15 @@ class WalletProvider with ChangeNotifier {
       balance: 0.0,
     );
 
-    _storage.saveSession(wif);
     _isLoading = false;
     _message = '✅ Wallet generated successfully!';
     notifyListeners();
+
+    // Auto-clear success message
+    Future.delayed(const Duration(seconds: 5), () {
+      if (_message.contains('✅')) _message = '';
+      notifyListeners();
+    });
   }
 
   Future<void> generateNewSeedWallet({int words = 12}) async {
@@ -219,10 +249,15 @@ class WalletProvider with ChangeNotifier {
       balance: 0.0,
     );
 
-    _storage.saveSession(wif);
     _isLoading = false;
     _message = '✅ Seed phrase generated!';
     notifyListeners();
+
+    // Auto-clear success message
+    Future.delayed(const Duration(seconds: 5), () {
+      if (_message.contains('✅')) _message = '';
+      notifyListeners();
+    });
   }
   Future<bool> migrateToSeed({int words = 12, bool skipSweep = false}) async {
     if (_wallet == null || _wallet!.type != WalletType.wif) return false;
@@ -274,12 +309,17 @@ class WalletProvider with ChangeNotifier {
       balance: 0.0,
     );
     
-    _storage.saveSession(newWif);
     _isLoading = false;
     _message = currentBalance > 0 
       ? '✅ Migration successful! Funds swept.' 
       : '✅ Migration successful! (Empty wallet)';
     notifyListeners();
+
+    // Auto-clear success message
+    Future.delayed(const Duration(seconds: 5), () {
+      if (_message.contains('✅')) _message = '';
+      notifyListeners();
+    });
     
     // Refresh balance in background so modal can show immediately
     refreshBalance();
