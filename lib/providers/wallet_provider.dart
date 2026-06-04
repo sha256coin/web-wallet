@@ -87,23 +87,30 @@ class WalletProvider with ChangeNotifier {
     });
   }
 
-  Future<void> refreshBalance() async {
-    if (_wallet == null) return;
+    Future<void> refreshBalance() async {
+      if (_wallet == null) return;
 
-    final utxos = await _walletService.getUtxos(_rpcUrl, _rpcUser, _rpcPassword, _wallet!.address);
-    final balance = _walletService.calculateBalance(utxos);
-    final unconfirmed = _walletService.calculateUnconfirmedBalance(utxos);
-    
-    // Check if any UTXO is unconfirmed OR if we have the special 'pending_marker' flag
-    final hasMempoolActivity = utxos.any((u) => u['confirmations'] == 0);
+      try {
+        final utxos = await _walletService.getUtxos(
+            _rpcUrl, _rpcUser, _rpcPassword, _wallet!.address);
+        final balance = _walletService.calculateBalance(utxos);
+        final unconfirmed = _walletService.calculateUnconfirmedBalance(utxos);
+        final hasMempoolActivity = utxos.any((u) => u['confirmations'] == 0);
 
-    _wallet = _wallet!.copyWith(
-      balance: balance,
-      unconfirmedBalance: unconfirmed,
-      isPending: hasMempoolActivity || _localPendingTxs.isNotEmpty,
-    );
-    notifyListeners();
-  }
+        if (!hasMempoolActivity) {
+          _localPendingTxs.clear();
+        }
+
+        _wallet = _wallet!.copyWith(
+          balance: balance,
+          unconfirmedBalance: unconfirmed,
+          isPending: hasMempoolActivity || _localPendingTxs.isNotEmpty,
+        );
+        notifyListeners();
+      } catch (_) {
+        // Silent fail — UI keeps last known state, no crash
+      }
+    }
 
   Future<bool> sendTransaction(String toAddress, double amount) async {
     if (_wallet == null) return false;
@@ -152,6 +159,7 @@ class WalletProvider with ChangeNotifier {
     _wallet = null;
     _isLoading = false;
     _message = '';
+    _localPendingTxs.clear(); // ← missing
     _storage.clearSession();
     notifyListeners();
   }
@@ -259,6 +267,7 @@ class WalletProvider with ChangeNotifier {
       notifyListeners();
     });
   }
+
   Future<bool> migrateToSeed({int words = 12, bool skipSweep = false}) async {
     if (_wallet == null || _wallet!.type != WalletType.wif) return false;
 
@@ -271,6 +280,9 @@ class WalletProvider with ChangeNotifier {
     // 1. Generate new seed wallet
     final oldWif = _wallet!.privateKey;
     final oldAddress = _wallet!.address;
+
+    // Before reading balance, refresh first
+    await refreshBalance();
     final currentBalance = _wallet!.balance;
     
     final walletData = await _walletService.generateNewSeedWallet(words: words);
@@ -299,6 +311,7 @@ class WalletProvider with ChangeNotifier {
         notifyListeners();
         return false;
       }
+     _localPendingTxs.add(result['txid'] as String);
     }
 
     _wallet = WalletModel(
