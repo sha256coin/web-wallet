@@ -321,10 +321,19 @@ class WalletService {
   ) async {
     // Get UTXOs (Filter out pending marker)
     final allUtxos = await getUtxos(rpcUrl, rpcUser, rpcPassword, fromAddress);
-    final utxos = allUtxos.where((u) => u['txid'] != 'pending_marker').toList();
+    final utxos = allUtxos.where((u) => u['txid'] != 'pending_marker' && (u['confirmations'] as int) > 0).toList();
 
     if (utxos.isEmpty) {
-      return {'success': false, 'message': 'No confirmed funds available. Please wait approximately 20 minutes for your deposit to confirm.'};
+      final hasPending = allUtxos.any((u) =>
+        u['txid'] != 'pending_marker' &&
+        (u['confirmations'] as int) == 0
+      );
+      return {
+        'success': false,
+        'message': hasPending
+          ? 'Your funds are pending confirmation. Please wait approximately 20 minutes before sending again.'
+          : 'No confirmed funds available. Please wait approximately 20 minutes for your deposit to confirm.'
+      };
     }
 
     final totalAvailable = utxos.fold(0.0, (sum, utxo) => sum + (utxo['amount'] as num).toDouble());
@@ -464,13 +473,17 @@ class WalletService {
   // Calculate balance from UTXOs
   double calculateBalance(List<Map<String, dynamic>> utxos) {
     return utxos
-        .where((utxo) => (utxo['confirmations'] as int) > 0)
-        .fold(0.0, (sum, utxo) => sum + (utxo['amount'] as num? ?? 0.0).toDouble());
+        .where((u) =>
+            u['txid'] != 'pending_marker' &&
+            (u['confirmations'] as int) > 0)  // ← only confirmed
+        .fold(0.0, (sum, u) => sum + (u['amount'] as double));
   }
 
   double calculateUnconfirmedBalance(List<Map<String, dynamic>> utxos) {
     return utxos
-        .where((utxo) => (utxo['confirmations'] as int) == 0)
-        .fold(0.0, (sum, utxo) => sum + (utxo['amount'] as num? ?? 0.0).toDouble());
+        .where((u) =>
+            u['txid'] != 'pending_marker' &&
+            (u['confirmations'] as int) == 0)  // ← only unconfirmed
+        .fold(0.0, (sum, u) => sum + (u['amount'] as double));
   }
 }

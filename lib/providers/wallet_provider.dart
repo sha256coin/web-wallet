@@ -95,7 +95,7 @@ class WalletProvider with ChangeNotifier {
     final unconfirmed = _walletService.calculateUnconfirmedBalance(utxos);
     
     // Check if any UTXO is unconfirmed OR if we have the special 'pending_marker' flag
-    final hasMempoolActivity = utxos.any((u) => u['confirmations'] == 0 || u['txid'] == 'pending_marker');
+    final hasMempoolActivity = utxos.any((u) => u['confirmations'] == 0);
 
     _wallet = _wallet!.copyWith(
       balance: balance,

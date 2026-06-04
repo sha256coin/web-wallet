@@ -110,7 +110,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Image.asset('assets/logo.png', height: 220),
+            Image.asset('assets/logo.png', height: 200),
             const SizedBox(height: 60),
             _buildSidebarItem(0, Icons.account_balance_wallet_rounded, 'Assets'),
             _buildSidebarItem(1, Icons.send_rounded, 'Send'),
@@ -128,11 +128,6 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
             ListTile(
               leading: const Icon(Icons.support_agent_rounded, size: 18, color: Colors.white38),
               title: const Text('contact@sha256coin.eu', style: TextStyle(fontSize: 14, color: Colors.white54)),
-            ),
-            const SizedBox(height: 10),
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 16),
-              child: Text('S256 Web-Wallet version 2.1', style: TextStyle(color: Colors.white54, fontSize: 12)),
             ),
             const SizedBox(height: 20),
             ListTile(
@@ -391,75 +386,109 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
     );
   }
 
-  int _migrationSeedWords = 12;
+int _migrationSeedWords = 12;
 
-  void _showMigrationDialog(BuildContext context, WalletProvider provider) {
-    final isEmpty = provider.wallet!.balance <= 0.00001;
-    final dashboardContext = context;
+void _showMigrationDialog(BuildContext context, WalletProvider provider) {
+  final isEmpty = provider.wallet!.balance <= 0.00001;
+  final dashboardContext = context;
 
-    showDialog(
-      context: dashboardContext,
-      builder: (dialogContext) => StatefulBuilder(
-        builder: (statefulContext, setDialogState) => AlertDialog(
-          title: Text(isEmpty ? 'Switch to Seed Phrase' : 'Confirm Migration'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                isEmpty
-                    ? 'Your current wallet is empty. We will simply generate a NEW seed phrase wallet for you to use going forward.'
-                    : 'This will generate a NEW seed phrase and send ALL your funds to the new address. '
-                        'You MUST backup the new seed phrase immediately after migration.\n\n'
-                        'A small network fee will apply.',
+  showDialog(
+    context: dashboardContext,
+    builder: (dialogContext) => StatefulBuilder(
+      builder: (statefulContext, setDialogState) => AlertDialog(
+        title: isEmpty
+            ? const Text('Switch to Seed Phrase')
+            : Row(
+                children: const [
+                  Icon(Icons.warning_amber_rounded, color: Colors.red),
+                  SizedBox(width: 12),
+                  Expanded(child: Text('Confirm Migration')),
+                ],
               ),
-              const SizedBox(height: 20),
-              const Text('Choose New Seed Length:', style: TextStyle(fontWeight: FontWeight.bold)),
-              const SizedBox(height: 12),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.red.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.red.withValues(alpha: 0.3)),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  ChoiceChip(
-                    label: const Text('12 Words'),
-                    selected: _migrationSeedWords == 12,
-                    onSelected: (selected) {
-                      if (selected) setDialogState(() => _migrationSeedWords = 12);
-                    },
-                  ),
+                  const Icon(Icons.error_outline_rounded, color: Colors.redAccent),
                   const SizedBox(width: 12),
-                  ChoiceChip(
-                    label: const Text('24 Words'),
-                    selected: _migrationSeedWords == 24,
-                    onSelected: (selected) {
-                      if (selected) setDialogState(() => _migrationSeedWords = 24);
-                    },
+                  Expanded(
+                    child: Text(
+                      isEmpty
+                          ? 'NOTICE: This will generate a NEW seed phrase. No funds will be moved. BACKUP the generated seed phrase IMMEDIATELY ! after migration.'
+                          : 'WARNING: This will MOVE ALL FUNDS to a NEW address. BACKUP the generated seed phrase IMMEDIATELY ! \n This action is irreversible. If you FAIL TO BACKUP the new seed phrase, you will LOSE ACCESS to your funds FOREVER.',
+                      style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold),
+                    ),
                   ),
                 ],
               ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: const Text('Cancel'),
             ),
-            ElevatedButton(
-              onPressed: () async {
-                Navigator.pop(dialogContext);
-                final success = await provider.migrateToSeed(words: _migrationSeedWords);
-                if (success && dashboardContext.mounted) {
-                  _showBackupDialog(dashboardContext, provider);
-                }
-              },
-              style: ElevatedButton.styleFrom(
-                  backgroundColor: isEmpty ? AppTheme.primaryColor : Colors.orange,
-                  foregroundColor: isEmpty ? Colors.white : Colors.black),
-              child: Text(isEmpty ? 'Generate Seed Wallet' : 'Generate Seed & Sweep'),
+            const SizedBox(height: 12),
+            Text(
+              isEmpty
+                  ? 'Your current wallet is empty. We will simply generate a NEW seed phrase wallet for you to use going forward.'
+                  : 'This will generate a NEW seed phrase and send ALL your funds to the new address. '
+                      'You MUST backup the new seed phrase immediately after migration.\n\n'
+                      'A small network fee will apply.',
+            ),
+            const SizedBox(height: 20),
+            const Text('Choose New Seed Length:', style: TextStyle(fontWeight: FontWeight.bold)),
+            const SizedBox(height: 12),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                ChoiceChip(
+                  label: const Text('12 Words'),
+                  selected: _migrationSeedWords == 12,
+                  onSelected: (selected) {
+                    if (selected) setDialogState(() => _migrationSeedWords = 12);
+                  },
+                ),
+                const SizedBox(width: 12),
+                ChoiceChip(
+                  label: const Text('24 Words'),
+                  selected: _migrationSeedWords == 24,
+                  onSelected: (selected) {
+                    if (selected) setDialogState(() => _migrationSeedWords = 24);
+                  },
+                ),
+              ],
             ),
           ],
         ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.pop(dialogContext);
+              final success = await provider.migrateToSeed(words: _migrationSeedWords);
+              if (success && dashboardContext.mounted) {
+                _showBackupDialog(dashboardContext, provider);
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: isEmpty ? AppTheme.primaryColor : Colors.orange,
+              foregroundColor: isEmpty ? Colors.white : Colors.black,
+            ),
+            child: Text(isEmpty ? 'Generate Seed Wallet' : 'Generate Seed & Sweep'),
+          ),
+        ],
       ),
-    );
-  }
+    ),
+  );
+}
 
   Widget _buildSendTab(WalletProvider provider) {
     return SingleChildScrollView(
@@ -594,22 +623,21 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
           subtitle: const Text('View your seed phrase or private key'),
           trailing: const Icon(Icons.security_rounded),
         ),
-        const SizedBox(height: 20),
-        const Text('Links', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white54)),
-        const SizedBox(height: 10),
+        const Divider(),
         ListTile(
           onTap: () => launchUrl(Uri.parse('https://sha256coin.eu/')),
           leading: const Icon(Icons.language_rounded, color: AppTheme.primaryColor),
           title: const Text('Official Website'),
           subtitle: const Text('sha256coin.eu'),
-          trailing: const Icon(Icons.open_in_new_rounded, size: 18, color: Colors.white24),
+          trailing: const Icon(Icons.open_in_new_rounded, size: 14, color: Colors.white24),
         ),
+        const Divider(),
         ListTile(
           onTap: () => launchUrl(Uri.parse('https://sha256coin.eu/explorer')),
           leading: const Icon(Icons.search_rounded, color: AppTheme.primaryColor),
           title: const Text('Block Explorer'),
           subtitle: const Text('Check transactions and blocks'),
-          trailing: const Icon(Icons.open_in_new_rounded, size: 18, color: Colors.white24),
+          trailing: const Icon(Icons.open_in_new_rounded, size: 14, color: Colors.white24),
         ),
         const Divider(),
         const SizedBox(height: 40),
@@ -618,6 +646,14 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
           style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent.withValues(alpha: 0.1), foregroundColor: Colors.redAccent),
           child: const Text('Logout & Clear Session'),
         ),
+        const SizedBox(height: 10),
+        const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 16),
+              child: Text('S256 Web-Wallet version 2.2', 
+              style: TextStyle(color: Colors.white54, fontSize: 12),
+              textAlign: TextAlign.center
+        ),      
+       ),
       ],
     );
   }
