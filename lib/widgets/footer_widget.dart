@@ -162,7 +162,7 @@ class FooterWidget extends StatelessWidget {
       title: 'Resources',
       icon: FontAwesomeIcons.layerGroup,
       links: [
-        _FooterLink('Whitepaper', 'whitepaper.html', icon: FontAwesomeIcons.fileLines),
+        _FooterLink('Whitepaper', 'https://sha256coin.eu/whitepaper.html', icon: FontAwesomeIcons.fileLines),
         _FooterLink('BlockChain Explorer', 'https://explorer.sha256coin.eu', icon: FontAwesomeIcons.magnifyingGlass),
         _FooterLink('GitHub', 'https://github.com/sha256coin', icon: FontAwesomeIcons.github),
         _FooterLink('Documentation', 'https://github.com/bitcoin/bitcoin', icon: FontAwesomeIcons.bitcoin),
