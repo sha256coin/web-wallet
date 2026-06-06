@@ -20,7 +20,7 @@ class FooterWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 80, horizontal: 24),
+      padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 24),
       decoration: BoxDecoration(
         color: Colors.black.withValues(alpha: 0.2),
         border: const Border(
@@ -29,7 +29,7 @@ class FooterWidget extends StatelessWidget {
       ),
       child: Center(
         child: Container(
-          constraints: const BoxConstraints(maxWidth: 1600),
+          constraints: const BoxConstraints(maxWidth: 1800),
           child: Column(
             children: [
               LayoutBuilder(
@@ -80,9 +80,9 @@ class FooterWidget extends StatelessWidget {
                   }
                 },
               ),
-              const SizedBox(height: 80),
+              const SizedBox(height: 10),
               const Divider(color: Colors.white10),
-              const SizedBox(height: 30),
+              const SizedBox(height: 10),
               _buildBottomSection(),
             ],
           ),

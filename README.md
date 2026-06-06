@@ -62,7 +62,7 @@ A new dashboard to monitor the S256 network health directly within the wallet:
 
 - Private keys exist ONLY in memory during your active session.
 - Closing the tab or refreshing the page logs you out instantly.
-- Always verify the URL is `sha256coin.eu`.
+- Always verify the URL is `https://sha256coin.eu`.
 - For large amounts, always use a desktop or hardware wallet.
 
 ## Development
@@ -70,6 +70,10 @@ A new dashboard to monitor the S256 network health directly within the wallet:
 Run locally:
 ```bash
 flutter run -d chrome
+```
+or
+```bash
+flutter run -d web-server --web-port 8080
 ```
 
 ## Building for Deployment
@@ -81,7 +85,13 @@ flutter build web --release --base-href "/web-wallet/"
 
 ## RPC Configuration
 
-The wallet connects to the public S256 RPC proxy at `https://sha256coin.eu/rpc`. The proxy handles CORS and restricts allowed RPC methods to ensure network security.
+The wallet uses an RPC proxy to communicate with S256 nodes. By default the project expects a secure proxy endpoint such as `https://sha256coin.eu/rpc` (or your own proxy).
+
+The proxy must:
+
+- Serve over HTTPS.
+- Return a single `Access-Control-Allow-Origin` header matching `https://sha256coin.eu/` (or the origin you host the wallet from).
+- Handle preflight `OPTIONS` requests and forward POST JSON-RPC payloads to an upstream node.
 
 ## License
 
