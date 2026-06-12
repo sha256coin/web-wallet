@@ -1,4 +1,4 @@
-# S256 Coin Web Wallet v2.2
+# S256 Coin Web Wallet v2.3
 
 A modern, secure, and modular web wallet for S256 coin. This version introduces significant architectural improvements, seed phrase support, and a built-in migration tool.
 
@@ -16,7 +16,7 @@ A modern, secure, and modular web wallet for S256 coin. This version introduces 
   <a href="https://explorer.sha256coin.eu">Explorer</a>
 </p>
 
-## Major Updates in v2.2
+## Major Updates in v2.3
 
 ### 🏗️ Modular Architecture
 The project has been refactored from a monolithic structure to a scalable, modular architecture using the **Provider** pattern:
