@@ -107,7 +107,7 @@ class FooterWidget extends StatelessWidget {
               child: const Text(
                 'S256',
                 style: TextStyle(
-                  fontSize: 32,
+                  fontSize: 42,
                   fontWeight: FontWeight.w900,
                   color: Colors.white,
                   letterSpacing: 1,
@@ -116,12 +116,21 @@ class FooterWidget extends StatelessWidget {
             ),
           ],
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 4),
         const Text(
           'Digital Platinum',
           style: TextStyle(
             color: Colors.white70,
-            fontSize: 16,
+            fontSize: 24,
+            fontWeight: FontWeight.w800,
+            letterSpacing: 1.9,
+          ),
+        ),
+        const Text(
+          'A secure, decentralized cryptocurrency built on the SHA-256 algorithm,\ndesigned for long-term value and stability.',
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 12,
             fontWeight: FontWeight.w500,
             letterSpacing: 0.5,
           ),
@@ -164,7 +173,7 @@ class FooterWidget extends StatelessWidget {
       links: [
         _FooterLink('Whitepaper', 'https://sha256coin.eu/whitepaper.html', icon: FontAwesomeIcons.fileLines),
         _FooterLink('BlockChain Explorer', 'https://explorer.sha256coin.eu', icon: FontAwesomeIcons.magnifyingGlass),
-        _FooterLink('GitHub', 'https://github.com/sha256coin', icon: FontAwesomeIcons.github),
+        _FooterLink('GitHub', 'https://github.com/sha256coin/web-wallet', icon: FontAwesomeIcons.github),
         _FooterLink('Documentation', 'https://github.com/bitcoin/bitcoin', icon: FontAwesomeIcons.bitcoin),
       ],
     );
