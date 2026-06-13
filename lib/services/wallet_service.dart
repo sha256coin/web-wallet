@@ -457,6 +457,49 @@ class WalletService {
     };
   }
 
+  // ---------------------------------------------------------------------------
+  // Get transaction history for an address via the Explorer API.
+  // Uses server-side pagination with offset and limit.
+  // ---------------------------------------------------------------------------
+  Future<Map<String, dynamic>> getTransactions(String address, {int offset = 0, int limit = 10}) async {
+    const String explorerBase = 'https://explorer.sha256coin.eu/api/address';
+    final url = '$explorerBase/$address/txs?offset=$offset&limit=$limit';
+
+    try {
+      final response = await http.get(Uri.parse(url));
+      if (response.statusCode != 200) return {'transactions': [], 'txCount': 0};
+
+      final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+      final txList = decoded['transactions'] as List<dynamic>? ?? [];
+      final txCount = decoded['txCount'] as int? ?? 0;
+
+      final parsedTransactions = txList.map((t) {
+        final tx = t as Map<String, dynamic>;
+        final amt = tx['addressAmount'] as Map<String, dynamic>? ?? {};
+        final direction = (amt['direction'] as String?) ?? 'in';
+        final net = (amt['net'] as num?)?.toDouble() ?? 0.0;
+        final confirmations = (tx['confirmations'] as int?) ?? 0;
+        final blocktime = tx['blocktime'] as int? ?? tx['time'] as int?;
+
+        return {
+          'txid': tx['txid'] as String,
+          'amount': net.abs(),
+          'direction': direction == 'out' ? 'sent' : 'received',
+          'confirmations': confirmations,
+          'timestamp': blocktime,
+          'counterparty': null, // explorer doesn't expose counterparty simply
+        };
+      }).toList();
+
+      return {
+        'transactions': parsedTransactions,
+        'txCount': txCount,
+      };
+    } catch (_) {
+      return {'transactions': [], 'txCount': 0};
+    }
+  }
+
   // Get network info
   Future<Map<String, dynamic>?> getNetworkInfo(
     String rpcUrl,
