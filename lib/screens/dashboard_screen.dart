@@ -682,7 +682,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
         border: Border.all(color: Colors.green.withValues(alpha: 0.3)),
       ),
       child: Text(
-        '${tx.confirmations} conf',
+        '${tx.confirmations} Confirmations',
         style: const TextStyle(
             fontSize: 9, color: Colors.greenAccent, fontWeight: FontWeight.bold),
       ),
