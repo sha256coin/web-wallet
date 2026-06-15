@@ -313,7 +313,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
         gradient: LinearGradient(
           colors: wallet.hasPending
               ? [Colors.orange.shade800, Colors.orange.shade600]
-              : [const Color(0xFF1A3A5C), const Color(0xFF0D2137)],
+              : [AppTheme.primaryColor, AppTheme.accentColor],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
