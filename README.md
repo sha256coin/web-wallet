@@ -1,4 +1,4 @@
-# S256 Coin Web Wallet v2.3
+# S256 Coin Web Wallet v2.4
 
 A modern, secure, and modular web wallet for S256 coin. This version introduces significant architectural improvements, seed phrase support, and a built-in migration tool.
 
@@ -7,7 +7,7 @@ A modern, secure, and modular web wallet for S256 coin. This version introduces 
 </p>
 
 <p align="center">
-  <strong>The Official Web Wallet for SHA256coin (S256)</strong><br>
+  <strong>The Official Web-Wallet for SHA256coin (S256)</strong><br>
   Built with Flutter for Web
 </p>
 
@@ -16,7 +16,11 @@ A modern, secure, and modular web wallet for S256 coin. This version introduces 
   <a href="https://explorer.sha256coin.eu">Explorer</a>
 </p>
 
-## Major Updates in v2.3
+## Major Updates in v2.4
+
+### 💰 Live price update fetched directly from LiveCoinWatch
+- Sha256Coin price is aquired directly from LiveCoinWatch and updated every 5 minutes.
+- Wallet balance is converted in USD and displayed to keep user informed about price fluctuations.
 
 ### 🏗️ Modular Architecture
 The project has been refactored from a monolithic structure to a scalable, modular architecture using the **Provider** pattern:
