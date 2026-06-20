@@ -1,4 +1,4 @@
-# S256 Coin Web Wallet v2.4
+# S256 Coin Web Wallet
 
 A modern, secure, and modular web wallet for S256 coin. This version introduces significant architectural improvements, seed phrase support, and a built-in migration tool.
 
@@ -15,6 +15,31 @@ A modern, secure, and modular web wallet for S256 coin. This version introduces 
   <a href="https://sha256coin.eu">Website</a> •
   <a href="https://explorer.sha256coin.eu">Explorer</a>
 </p>
+
+## Major Updates in v2.5
+
+### 🪙 Coin Control (Advanced Send)
+Full control over which UTXOs are used in a transaction:
+- **Advanced tab** in the Send view lets you hand-pick inputs from your confirmed UTXO set.
+- **Scrollable UTXO table** with index, truncated TXID:vout, amount, and real confirmation count.
+- **Live selection summary**: selected input count and total update instantly as you check/uncheck.
+- **Auto-fill amount**: selecting inputs pre-fills the amount field with the exact total.
+- **All / None** shortcuts for quick selection.
+- Pagination-free — fixed-height scrollable list handles wallets of any size cleanly.
+
+### 💸 Fee Estimation
+- **Simple mode**: estimated fee displayed based on a typical 1-in 2-out transaction (226 bytes).
+- **Advanced mode**: exact fee estimate recalculated live based on the actual number of selected inputs.
+- **Net send** display shows exactly how much the recipient receives after fees.
+- Fee rate fetched live from the node via `estimatesmartfee`.
+
+### ✅ Address & Amount Validation
+- **Live RPC address validation**: recipient address is verified against the node with a 700ms debounce — green tick on valid, red cross on invalid.
+- **Amount guards**: catches negative values, zero, dust threshold violations (< 0.00000546 S256), and amounts exceeding selected inputs or available balance.
+- **Send button disabled** while validating or when any input error is present — no bad transactions can be fired.
+
+### 📈 Real Confirmation Counts
+- UTXO confirmations now calculated accurately from block height (`getblockcount` − UTXO height + 1) instead of being hardcoded.
 
 ## Major Updates in v2.4
 
@@ -58,6 +83,7 @@ A new dashboard to monitor the S256 network health directly within the wallet:
 - **Seed Phrase Wallet**: Modern 12/24 word recovery phrases (Recommended).
 - **Legacy WIF Wallet**: Support for existing raw Private Keys (WIF).
 - **Send/Receive**: Full transaction support with Bech32 (s21...) addresses and QR codes.
+- **Coin Control**: Advanced UTXO selection for privacy and fee optimization.
 - **Glassmorphism UI**: A sleek, dark-themed interface with neon purple and gold accents.
 
 ## Security Warning

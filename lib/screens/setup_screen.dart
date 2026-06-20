@@ -159,7 +159,7 @@ class _SetupScreenState extends State<SetupScreen> {
                 ],
                 const SizedBox(height: 40),
                 const Text(
-                  'S256 Web-Wallet version 2.4',
+                  'S256 Web-Wallet version 2.5',
                   style: TextStyle(color: Colors.white54, fontSize: 14),
                   textAlign: TextAlign.center,
                 ),
