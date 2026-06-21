@@ -1,4 +1,4 @@
-# S256 Coin Web Wallet
+# S256 Coin Web-Wallet
 
 A modern, secure, and modular web wallet for S256 coin. This version introduces significant architectural improvements, seed phrase support, and a built-in migration tool.
 

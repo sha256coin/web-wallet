@@ -375,7 +375,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // ── Balance Card ──────────────────────────────────────────
+          // ── Balance Card ────────────────────────────────────────────
           _buildBalanceCard(wallet, provider),
           const SizedBox(height: 40),
           const Text('Your Assets', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
@@ -1209,9 +1209,14 @@ int _migrationSeedWords = 12;
               const SizedBox(height: 40),
 
               ElevatedButton(
-                onPressed: provider.isLoading || amountErr != null || _addressValid == false || _isValidatingAddress
+                onPressed: provider.isLoading 
+                    || amountErr != null 
+                    || _isValidatingAddress
+                    || _toController.text.trim().isEmpty    
+                    || _addressValid != true                
                     ? null
                     : () async {
+                        provider.clearMessage();            
                         final amount = double.tryParse(_amountController.text);
                         if (amount != null) {
                           final success = await provider.sendTransaction(
