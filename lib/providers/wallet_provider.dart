@@ -47,19 +47,20 @@ class WalletProvider with ChangeNotifier {
   int get selectedUtxoCount => _selectedUtxoKeys.length;
   // Typical 1-in 2-out tx = 10 + 148 + 68 = 226 bytes
   double get estimatedSimpleFee => double.parse((_feeRate * 226 / 1000).toStringAsFixed(8));
+  
   double get selectedUtxoTotal => _availableUtxos
       .where((u) => _selectedUtxoKeys.contains('${u['txid']}:${u['vout']}'))
       .fold(0.0, (sum, u) => sum + (u['amount'] as num).toDouble());
+
+  List<Map<String, dynamic>> get selectedUtxoList => _availableUtxos
+      .where((u) => _selectedUtxoKeys.contains('${u['txid']}:${u['vout']}'))
+      .toList();  
 
   List<Map<String, dynamic>> get currentPageUtxos {
     final start = _utxoPage * _utxosPerPage;
     final end = (start + _utxosPerPage).clamp(0, _availableUtxos.length);
     return _availableUtxos.sublist(start, end);
   }
-
-  List<Map<String, dynamic>> get selectedUtxoList => _availableUtxos
-      .where((u) => _selectedUtxoKeys.contains('${u['txid']}:${u['vout']}'))
-      .toList();
 
   double get estimatedFee {
     if (_selectedUtxoKeys.isEmpty) return 0.0;
@@ -178,6 +179,7 @@ class WalletProvider with ChangeNotifier {
   }
 
   Future<void> refreshBalance() async {
+
       if (_wallet == null) return;
 
       try {
@@ -210,7 +212,7 @@ class WalletProvider with ChangeNotifier {
         _message = '⚠️ Connection lost. Displaying cached balances.';
         notifyListeners();
       }
-    }
+  }
 
     /// Fetch first page of transactions for the current wallet address.
     Future<void> fetchTransactions() async {
