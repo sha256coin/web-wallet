@@ -84,6 +84,8 @@ class FooterWidget extends StatelessWidget {
               const Divider(color: Colors.white10),
               const SizedBox(height: 10),
               _buildBottomSection(),
+              const SizedBox(height: 18),
+              _buildLegalSection(),
             ],
           ),
         ),
@@ -171,7 +173,7 @@ class FooterWidget extends StatelessWidget {
       title: 'Resources',
       icon: FontAwesomeIcons.layerGroup,
       links: [
-        _FooterLink('Whitepaper', 'https://sha256coin.eu/whitepaper.html', icon: FontAwesomeIcons.fileLines),
+        _FooterLink('Technical Paper', 'https://sha256coin.eu/whitepaper.html', icon: FontAwesomeIcons.fileLines),
         _FooterLink('BlockChain Explorer', 'https://explorer.sha256coin.eu', icon: FontAwesomeIcons.magnifyingGlass),
         _FooterLink('GitHub', 'https://github.com/sha256coin/web-wallet', icon: FontAwesomeIcons.github),
         _FooterLink('Documentation', 'https://github.com/bitcoin/bitcoin', icon: FontAwesomeIcons.bitcoin),
@@ -305,7 +307,7 @@ class FooterWidget extends StatelessWidget {
   Widget _buildBottomSection() {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final isMobile = constraints.maxWidth < 800;
+        final isMobile = constraints.maxWidth < 950;
         
         final copyright = Text(
           '© 2026 S256 — Open source cryptocurrency.',
@@ -337,22 +339,21 @@ class FooterWidget extends StatelessWidget {
           ],
         );
 
-        final links = Wrap(
+        final legalLinks = Wrap(
           spacing: 20,
           runSpacing: 10,
           alignment: isMobile ? WrapAlignment.center : WrapAlignment.start,
           children: [
-            _buildBottomLink('Features', FontAwesomeIcons.star),
-            _buildBottomLink('Ecosystem', FontAwesomeIcons.hubspot),
-            _buildBottomLink('Specs', FontAwesomeIcons.listCheck),
-            _buildBottomLink('Downloads', FontAwesomeIcons.download),
+            _buildBottomLink('Privacy', FontAwesomeIcons.shieldHalved, 'https://sha256coin.eu/privacy.html'),
+            _buildBottomLink('Terms', FontAwesomeIcons.fileContract, 'https://sha256coin.eu/terms.html'),
+            _buildBottomLink('Risk Disclosure', FontAwesomeIcons.triangleExclamation, 'https://sha256coin.eu/risk-disclosure.html'),
           ],
         );
 
         if (isMobile) {
           return Column(
             children: [
-              links,
+              legalLinks,
               const SizedBox(height: 24),
               origin,
               const SizedBox(height: 12),
@@ -367,18 +368,50 @@ class FooterWidget extends StatelessWidget {
             const Spacer(),
             origin,
             const Spacer(),
-            links,
+            legalLinks,
           ],
         );
       },
     );
   }
 
-  Widget _buildBottomLink(String label, dynamic icon) {
+  Widget _buildLegalSection() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.03),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+      ),
+      child: RichText(
+        text: TextSpan(
+          style: TextStyle(
+            color: Colors.white.withValues(alpha: 0.5),
+            fontSize: 12,
+            height: 1.5,
+            fontStyle: FontStyle.italic,
+          ),
+          children: const [
+            TextSpan(
+              text: 'Legal Disclaimer: ',
+              style: TextStyle(fontWeight: FontWeight.w700, fontStyle: FontStyle.normal),
+            ),
+            TextSpan(
+              text:
+                  'S256 (SHA256Coin) is a fully decentralized, open-source cryptocurrency based on the Proof-of-Work algorithm. There is no corporate entity, no pre-sale, no pre-mine, and no developer allocation. This website is for technical and informational purposes only. The software is provided "as is", without warranty of any kind. Users are solely responsible for securing their private keys and seed phrases and for complying with applicable local laws and tax regulations. S256 does not constitute a crypto-asset service under EU Regulation 2023/1114 (MiCA).',
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBottomLink(String label, dynamic icon, String url) {
     return MouseRegion(
       cursor: SystemMouseCursors.click,
       child: GestureDetector(
-        onTap: () => _launchUrl('https://sha256coin.eu/index.html#${label.toLowerCase()}'),
+        onTap: () => _launchUrl(url),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [

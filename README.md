@@ -54,7 +54,6 @@ This version marks a major shift in our security model:
 - **Frontend**: Flutter Web (Optimized for performance).
 - **Communication**: JSON-RPC over HTTPS.
 
-
 ## Major Updates in v2.4
 
 ### 💰 Live price update fetched directly from LiveCoinWatch

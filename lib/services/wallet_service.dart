@@ -299,8 +299,7 @@ class WalletService {
         final addresses = scriptPubKey['addresses'] as List<dynamic>? ?? [];
         final String? singleAddr = scriptPubKey['address'] as String?;
         
-        if (addresses.contains(address) || (singleAddr != null && singleAddr == address)) {
-          
+        if (addresses.contains(address) || (singleAddr != null && singleAddr == address)) {       
           // --- Safe Numeric Parsing ---
           double parsedAmount = 0.0;
           final rawValue = vout['value'];
@@ -309,7 +308,6 @@ class WalletService {
           } else if (rawValue is String) {
             parsedAmount = double.tryParse(rawValue) ?? 0.0;
           }
-
           incomingFromMempool.add({
             'txid': txid,
             'vout': vout['n'] ?? 0,
@@ -344,204 +342,205 @@ class WalletService {
     return finalUtxos;
   }
 
-Future<Map<String, dynamic>> sendTransaction(
-  String rpcUrl,
-  String rpcUser,
-  String rpcPassword,
-  String privateKeyWif,
-  String fromAddress,
-  String toAddress,
-  double amount, {
-  List<Map<String, dynamic>>? preSelectedUtxos,
-}) async {
-  // ── 1. Get UTXOs ────────────────────────────────────────────────────────
-  final allUtxos = await getUtxos(rpcUrl, rpcUser, rpcPassword, fromAddress);
-  final utxos = (preSelectedUtxos != null && preSelectedUtxos.isNotEmpty)
-      ? preSelectedUtxos
-      : allUtxos
-          .where((u) =>
-              u['txid'] != 'pending_marker' &&
-              (u['confirmations'] as int) > 0)
-          .toList();
+  // Send transaction
+  Future<Map<String, dynamic>> sendTransaction(
+    String rpcUrl,
+    String rpcUser,
+    String rpcPassword,
+    String privateKeyWif,
+    String fromAddress,
+    String toAddress,
+    double amount, {
+    List<Map<String, dynamic>>? preSelectedUtxos,
+  }) async {
+    // ── 1. Get UTXOs ────────────────────────────────────────────────────────
+    final allUtxos = await getUtxos(rpcUrl, rpcUser, rpcPassword, fromAddress);
+    final utxos = (preSelectedUtxos != null && preSelectedUtxos.isNotEmpty)
+        ? preSelectedUtxos
+        : allUtxos
+            .where((u) =>
+                u['txid'] != 'pending_marker' &&
+                (u['confirmations'] as int) > 0)
+            .toList();
 
-  if (utxos.isEmpty) {
-    final hasPending = allUtxos.any((u) =>
-        u['txid'] != 'pending_marker' && (u['confirmations'] as int) == 0);
-    return {
-      'success': false,
-      'message': hasPending
-          ? 'Your funds are pending confirmation. Please wait approximately 20 minutes before sending again.'
-          : 'No confirmed funds available. Please wait approximately 20 minutes for your deposit to confirm.',
-    };
-  }
-  // ── 2. Ensure every UTXO has a scriptPubKey UP FRONT ────────────────────
-  for (final utxo in utxos) {
-    if (utxo['scriptPubKey'] == null || (utxo['scriptPubKey'] as String).isEmpty) {
-      try {
-        final txOut = await rpcRequest(
-          rpcUrl, rpcUser, rpcPassword,
-          'gettxout',
-          [utxo['txid'], utxo['vout']],
-        );
-        if (txOut?['result']?['scriptPubKey']?['hex'] != null) {
-          utxo['scriptPubKey'] = txOut!['result']['scriptPubKey']['hex'] as String;
-        }
-      } catch (_) {}
-    }
-    
-    // Fallback directly to script generation from address if RPC fails
-    if (utxo['scriptPubKey'] == null || (utxo['scriptPubKey'] as String).isEmpty) {
-      try {
-        final generatedScript = S256Signer.scriptFromAddress(fromAddress);
-        utxo['scriptPubKey'] = HEX.encode(generatedScript);
-      } catch (_) {
-        return {
-          'success': false,
-          'message': 'Could not resolve scriptPubKey for UTXO ${utxo['txid']}.',
-        };
-      }
-    }
-  }
-
-  final totalAvailable = utxos.fold(
-      0.0, (sum, u) => sum + (u['amount'] as num).toDouble());
-  final bool isSweep = amount >= totalAvailable - 0.00001;
-
-  // Sort largest-first for efficient UTXO selection
-  utxos.sort((a, b) => ((b['amount'] as num).toDouble())
-      .compareTo((a['amount'] as num).toDouble()));
-
-  // ── 3. Fetch fee rate ───────────────────────────────────────────────────
-  double feeRate = 0.00001; // sat/vByte fallback
-  try {
-    final r = await rpcRequest(
-        rpcUrl, rpcUser, rpcPassword, 'estimatesmartfee', [6]);
-    if (r?['result']?['feerate'] != null) {
-      feeRate = (r!['result']['feerate'] as num).toDouble();
-    }
-  } catch (_) {}
-
-  // ── 4. UTXO selection + sizing loop ─────────────────────────────────────
-  final selectedUtxos = <Map<String, dynamic>>[];
-  double inputSum = 0.0;
-  for (int i = 0; i < utxos.length; i++) {
-    selectedUtxos.add(utxos[i]);
-    inputSum += (utxos[i]['amount'] as num).toDouble();
-
-    if (isSweep && i < utxos.length - 1) continue; 
-
-    // Precise sizing depending on destination type
-    final inputCount = selectedUtxos.length;
-    final bool isDestLegacy = !toAddress.toLowerCase().startsWith('s2');
-    
-    // Legacy outputs are 34 bytes, Native SegWit outputs are 31 bytes.
-    // Change address is always SegWit (31).
-    final int destOutputSize = isDestLegacy ? 34 : 31;
-    final int changeOutputSize = 31; 
-    
-    int txSize = 11 + (inputCount * 68);
-    
-    if (isSweep) {
-      txSize += destOutputSize;
-    } else {
-      txSize += destOutputSize + changeOutputSize;
-    }
-
-    final actualFee = double.parse((feeRate * txSize / 1000).toStringAsFixed(8));
-    final needed = isSweep ? actualFee : amount + actualFee;
-    if (inputSum < needed) continue; // Loop until input matches costs
-
-    // ── Build S256TxInput list ─────────────────────────────────────────
-    final inputs = selectedUtxos.map((u) {
-      String? scriptHex = u['scriptPubKey'] as String?;
-    // Safety Checkpoint: If null or empty, compute it directly from the source address
-      if (scriptHex == null || scriptHex.isEmpty) {
-        try {
-          final computedScript = S256Signer.scriptFromAddress(fromAddress);
-          scriptHex = HEX.encode(computedScript);
-        } catch (e) {
-          scriptHex = ''; 
-        }
-      }
-      return S256TxInput(
-        txid: u['txid'] as String,
-        vout: u['vout'] as int,
-        scriptPubKey: Uint8List.fromList(HEX.decode(scriptHex)),
-        satoshis: ((u['amount'] as num).toDouble() * 1e8).round(),
-      );
-    }).toList();
-
-    // ── Build S256TxOutput list ────────────────────────────────────────
-    final outputs = <S256TxOutput>[];
-    try {
-      if (isSweep) {
-        final sweepSats = ((inputSum - actualFee) * 1e8).round();
-        if (sweepSats <= 546) {
-          return {'success': false, 'message': 'Balance too low to cover fees.'};
-        }
-        outputs.add(S256TxOutput(
-          scriptPubKey: S256Signer.scriptFromAddress(toAddress),
-          satoshis: sweepSats,
-        ));
-      } else {
-        outputs.add(S256TxOutput(
-          scriptPubKey: S256Signer.scriptFromAddress(toAddress),
-          satoshis: (amount * 1e8).round(),
-        ));
-        final changeSats = ((inputSum - amount - actualFee) * 1e8).round();
-        if (changeSats > 546) {
-          outputs.add(S256TxOutput(
-            scriptPubKey: S256Signer.scriptFromAddress(fromAddress),
-            satoshis: changeSats,
-          ));
-        }
-      }
-    } catch (e) {
-      return {'success': false, 'message': 'Invalid destination address provided.'};
-    }
-
-    // ── Sign locally ───────────────────────────────────────────────────
-    String signedHex;
-    try {
-      signedHex = S256Signer.signTransaction(
-        inputs: inputs,
-        outputs: outputs,
-        wif: privateKeyWif,
-      );
-    } catch (e) {
-      return {'success': false, 'message': 'Signing failed: $e'};
-    }
-
-    // ── Broadcast ───────────────────────────────────────────────────────
-    final sendResult = await rpcRequest(
-      rpcUrl, rpcUser, rpcPassword,
-      'sendrawtransaction',
-      [signedHex], // Clean array input parameters
-    );
-
-    if (sendResult?['result'] != null) {
-      return {
-        'success': true,
-        'txid': sendResult!['result'],
-        'fee': actualFee,
-      };
-    }
-
-    final errMsg = sendResult?['error']?['message'] as String? ?? 'Unknown error';
-    if (errMsg.contains('insufficient fee') || errMsg.contains('rejecting replacement')) {
+    if (utxos.isEmpty) {
+      final hasPending = allUtxos.any((u) =>
+          u['txid'] != 'pending_marker' && (u['confirmations'] as int) == 0);
       return {
         'success': false,
-        'message': 'You have a pending transaction. Please wait approximately 20 minutes before sending another.',
+        'message': hasPending
+            ? 'Your funds are pending confirmation. Please wait approximately 20 minutes before sending again.'
+            : 'No confirmed funds available. Please wait approximately 20 minutes for your deposit to confirm.',
       };
     }
-    return {'success': false, 'message': errMsg};
-  }
+    // ── 2. Ensure every UTXO has a scriptPubKey UP FRONT ────────────────────
+    for (final utxo in utxos) {
+      if (utxo['scriptPubKey'] == null || (utxo['scriptPubKey'] as String).isEmpty) {
+        try {
+          final txOut = await rpcRequest(
+            rpcUrl, rpcUser, rpcPassword,
+            'gettxout',
+            [utxo['txid'], utxo['vout']],
+          );
+          if (txOut?['result']?['scriptPubKey']?['hex'] != null) {
+            utxo['scriptPubKey'] = txOut!['result']['scriptPubKey']['hex'] as String;
+          }
+        } catch (_) {}
+      }
+      
+      // Fallback directly to script generation from address if RPC fails
+      if (utxo['scriptPubKey'] == null || (utxo['scriptPubKey'] as String).isEmpty) {
+        try {
+          final generatedScript = S256Signer.scriptFromAddress(fromAddress);
+          utxo['scriptPubKey'] = HEX.encode(generatedScript);
+        } catch (_) {
+          return {
+            'success': false,
+            'message': 'Could not resolve scriptPubKey for UTXO ${utxo['txid']}.',
+          };
+        }
+      }
+    }
 
-  return {
-    'success': false,
-    'message': 'Insufficient funds. Available: ${inputSum.toStringAsFixed(8)} S256.',
-  };
-}
+    final totalAvailable = utxos.fold(
+        0.0, (sum, u) => sum + (u['amount'] as num).toDouble());
+    final bool isSweep = amount >= totalAvailable - 0.00001;
+
+    // Sort largest-first for efficient UTXO selection
+    utxos.sort((a, b) => ((b['amount'] as num).toDouble())
+        .compareTo((a['amount'] as num).toDouble()));
+
+    // ── 3. Fetch fee rate ───────────────────────────────────────────────────
+    double feeRate = 0.00001; // sat/vByte fallback
+    try {
+      final r = await rpcRequest(
+          rpcUrl, rpcUser, rpcPassword, 'estimatesmartfee', [6]);
+      if (r?['result']?['feerate'] != null) {
+        feeRate = (r!['result']['feerate'] as num).toDouble();
+      }
+    } catch (_) {}
+
+    // ── 4. UTXO selection + sizing loop ─────────────────────────────────────
+    final selectedUtxos = <Map<String, dynamic>>[];
+    double inputSum = 0.0;
+    for (int i = 0; i < utxos.length; i++) {
+      selectedUtxos.add(utxos[i]);
+      inputSum += (utxos[i]['amount'] as num).toDouble();
+
+      if (isSweep && i < utxos.length - 1) continue; 
+
+      // Precise sizing depending on destination type
+      final inputCount = selectedUtxos.length;
+      final bool isDestLegacy = !toAddress.toLowerCase().startsWith('s2');
+      
+      // Legacy outputs are 34 bytes, Native SegWit outputs are 31 bytes.
+      // Change address is always SegWit (31).
+      final int destOutputSize = isDestLegacy ? 34 : 31;
+      final int changeOutputSize = 31; 
+      
+      int txSize = 11 + (inputCount * 68);
+      
+      if (isSweep) {
+        txSize += destOutputSize;
+      } else {
+        txSize += destOutputSize + changeOutputSize;
+      }
+
+      final actualFee = double.parse((feeRate * txSize / 1000).toStringAsFixed(8));
+      final needed = isSweep ? actualFee : amount + actualFee;
+      if (inputSum < needed) continue; // Loop until input matches costs
+
+      // ── Build S256TxInput list ─────────────────────────────────────────
+      final inputs = selectedUtxos.map((u) {
+        String? scriptHex = u['scriptPubKey'] as String?;
+      // Safety Checkpoint: If null or empty, compute it directly from the source address
+        if (scriptHex == null || scriptHex.isEmpty) {
+          try {
+            final computedScript = S256Signer.scriptFromAddress(fromAddress);
+            scriptHex = HEX.encode(computedScript);
+          } catch (e) {
+            scriptHex = ''; 
+          }
+        }
+        return S256TxInput(
+          txid: u['txid'] as String,
+          vout: u['vout'] as int,
+          scriptPubKey: Uint8List.fromList(HEX.decode(scriptHex)),
+          satoshis: ((u['amount'] as num).toDouble() * 1e8).round(),
+        );
+      }).toList();
+
+      // ── Build S256TxOutput list ────────────────────────────────────────
+      final outputs = <S256TxOutput>[];
+      try {
+        if (isSweep) {
+          final sweepSats = ((inputSum - actualFee) * 1e8).round();
+          if (sweepSats <= 546) {
+            return {'success': false, 'message': 'Balance too low to cover fees.'};
+          }
+          outputs.add(S256TxOutput(
+            scriptPubKey: S256Signer.scriptFromAddress(toAddress),
+            satoshis: sweepSats,
+          ));
+        } else {
+          outputs.add(S256TxOutput(
+            scriptPubKey: S256Signer.scriptFromAddress(toAddress),
+            satoshis: (amount * 1e8).round(),
+          ));
+          final changeSats = ((inputSum - amount - actualFee) * 1e8).round();
+          if (changeSats > 546) {
+            outputs.add(S256TxOutput(
+              scriptPubKey: S256Signer.scriptFromAddress(fromAddress),
+              satoshis: changeSats,
+            ));
+          }
+        }
+      } catch (e) {
+        return {'success': false, 'message': 'Invalid destination address provided.'};
+      }
+
+      // ── Sign locally ───────────────────────────────────────────────────
+      String signedHex;
+      try {
+        signedHex = S256Signer.signTransaction(
+          inputs: inputs,
+          outputs: outputs,
+          wif: privateKeyWif,
+        );
+      } catch (e) {
+        return {'success': false, 'message': 'Signing failed: $e'};
+      }
+
+      // ── Broadcast ───────────────────────────────────────────────────────
+      final sendResult = await rpcRequest(
+        rpcUrl, rpcUser, rpcPassword,
+        'sendrawtransaction',
+        [signedHex], // Clean array input parameters
+      );
+
+      if (sendResult?['result'] != null) {
+        return {
+          'success': true,
+          'txid': sendResult!['result'],
+          'fee': actualFee,
+        };
+      }
+
+      final errMsg = sendResult?['error']?['message'] as String? ?? 'Unknown error';
+      if (errMsg.contains('insufficient fee') || errMsg.contains('rejecting replacement')) {
+        return {
+          'success': false,
+          'message': 'You have a pending transaction. Please wait approximately 20 minutes before sending another.',
+        };
+      }
+      return {'success': false, 'message': errMsg};
+    }
+
+    return {
+      'success': false,
+      'message': 'Insufficient funds. Available: ${inputSum.toStringAsFixed(8)} S256.',
+    };
+  }
   
   // ---------------------------------------------------------------------------
   // Get transaction history for an address via the Explorer API.
