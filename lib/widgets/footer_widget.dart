@@ -85,7 +85,7 @@ class FooterWidget extends StatelessWidget {
               const SizedBox(height: 10),
               _buildBottomSection(),
               const SizedBox(height: 18),
-              _buildLegalSection(),
+              _buildDisclaimerSection(),
             ],
           ),
         ),
@@ -339,7 +339,7 @@ class FooterWidget extends StatelessWidget {
           ],
         );
 
-        final legalLinks = Wrap(
+        final bottomLinks = Wrap(
           spacing: 20,
           runSpacing: 10,
           alignment: isMobile ? WrapAlignment.center : WrapAlignment.start,
@@ -353,7 +353,7 @@ class FooterWidget extends StatelessWidget {
         if (isMobile) {
           return Column(
             children: [
-              legalLinks,
+              bottomLinks,
               const SizedBox(height: 24),
               origin,
               const SizedBox(height: 12),
@@ -368,14 +368,14 @@ class FooterWidget extends StatelessWidget {
             const Spacer(),
             origin,
             const Spacer(),
-            legalLinks,
+            bottomLinks,
           ],
         );
       },
     );
   }
 
-  Widget _buildLegalSection() {
+  Widget _buildDisclaimerSection() {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(14),
@@ -394,7 +394,7 @@ class FooterWidget extends StatelessWidget {
           ),
           children: const [
             TextSpan(
-              text: 'Legal Disclaimer: ',
+              text: 'Disclaimer: ',
               style: TextStyle(fontWeight: FontWeight.w700, fontStyle: FontStyle.normal),
             ),
             TextSpan(
