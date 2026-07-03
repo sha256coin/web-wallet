@@ -1330,8 +1330,8 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   margin: const EdgeInsets.only(bottom: 8),
                   decoration: BoxDecoration(
-                    color: Colors.amber.withOpacity(0.1),
-                    border: Border.all(color: Colors.amber.withOpacity(0.4)),
+                    color: Colors.amber.withValues(alpha: 0.1),
+                    border: Border.all(color: Colors.amber.withValues(alpha: 0.4)),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Row(
@@ -1353,7 +1353,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
           decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.05),
+            color: Colors.white.withValues(alpha: 0.05),
             borderRadius: const BorderRadius.only(
               topLeft: Radius.circular(8),
               topRight: Radius.circular(8),
@@ -1392,10 +1392,10 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
                     decoration: BoxDecoration(
                       color: isSelected
-                          ? Colors.amber.withOpacity(0.07)
-                          : (i.isOdd ? Colors.white.withOpacity(0.02) : Colors.transparent),
+                          ? Colors.amber.withValues(alpha: 0.07)
+                          : (i.isOdd ? Colors.white.withValues(alpha: 0.02) : Colors.transparent),
                       border: Border(
-                        bottom: BorderSide(color: Colors.white.withOpacity(0.05)),
+                        bottom: BorderSide(color: Colors.white.withValues(alpha: 0.05)),
                       ),
                     ),
                     child: Row(
@@ -1455,9 +1455,9 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.05),
+        color: Colors.white.withValues(alpha: 0.05),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.white.withOpacity(0.08)),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
