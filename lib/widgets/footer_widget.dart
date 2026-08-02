@@ -3,6 +3,14 @@ import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../theme/app_theme.dart';
 
+const String s256DisclaimerTitle = 'Disclaimer: ';
+const String s256DisclaimerSummaryText =
+  'S256 (SHA256Coin) Web-Wallet is self-custodial software provided for technical and informational use. It is provided "as is" without warranties.';
+const String s256DisclaimerResponsibilityText =
+  'You are solely responsible for protecting your seed phrase and WIF private key, and for complying with local laws and tax obligations.';
+const String s256DisclaimerText =
+  'S256 (SHA256Coin) is a fully decentralized, open-source cryptocurrency based on the Proof-of-Work algorithm. There is no corporate entity, no pre-sale, no pre-mine, and no developer allocation. This website is for technical and informational purposes only. The software is provided "as is", without warranty of any kind. Users are solely responsible for securing their private keys and seed phrases and for complying with applicable local laws and tax regulations. S256 does not constitute a crypto-asset service under EU Regulation 2023/1114 (MiCA).';
+
 class FooterWidget extends StatelessWidget {
   const FooterWidget({super.key});
 
@@ -394,12 +402,11 @@ class FooterWidget extends StatelessWidget {
           ),
           children: const [
             TextSpan(
-              text: 'Disclaimer: ',
+              text: s256DisclaimerTitle,
               style: TextStyle(fontWeight: FontWeight.w700, fontStyle: FontStyle.normal),
             ),
             TextSpan(
-              text:
-                  'S256 (SHA256Coin) is a fully decentralized, open-source cryptocurrency based on the Proof-of-Work algorithm. There is no corporate entity, no pre-sale, no pre-mine, and no developer allocation. This website is for technical and informational purposes only. The software is provided "as is", without warranty of any kind. Users are solely responsible for securing their private keys and seed phrases and for complying with applicable local laws and tax regulations. S256 does not constitute a crypto-asset service under EU Regulation 2023/1114 (MiCA).',
+              text: s256DisclaimerText,
             ),
           ],
         ),

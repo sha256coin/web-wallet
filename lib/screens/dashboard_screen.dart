@@ -970,11 +970,41 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
         border: Border.all(color: Colors.green.withValues(alpha: 0.3)),
       ),
       child: Text(
-        '${tx.confirmations} Confirmations',
+        _formatConfirmationsLabel(tx.confirmations),
         style: const TextStyle(
             fontSize: 9, color: Colors.greenAccent, fontWeight: FontWeight.bold),
       ),
     );
+  }
+
+  String _formatConfirmationsLabel(int confirmations) {
+    if (confirmations <= 1) {
+      return '$confirmations conf';
+    }
+    return '${_formatCompactConfirmationCount(confirmations)} conf';
+  }
+
+  String _formatCompactConfirmationCount(int confirmations) {
+    if (confirmations < 1000) {
+      return '$confirmations';
+    }
+
+    const suffixes = ['K', 'M', 'B', 'T'];
+    double value = confirmations.toDouble();
+    var suffixIndex = -1;
+
+    while (value >= 1000 && suffixIndex < suffixes.length - 1) {
+      value /= 1000;
+      suffixIndex++;
+    }
+
+    var compact = value.toStringAsPrecision(3);
+    if (compact.contains('.')) {
+      compact = compact.replaceFirst(RegExp(r'0+$'), '');
+      compact = compact.replaceFirst(RegExp(r'\.$'), '');
+    }
+
+    return '$compact${suffixes[suffixIndex]}';
   }
 
   int _migrationSeedWords = 12;
@@ -1064,7 +1094,57 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
             ElevatedButton(
               onPressed: () async {
                 Navigator.pop(dialogContext);
-                final success = await provider.migrateToSeed(words: _migrationSeedWords);
+
+                // Safety gate 1: require smart-fee availability before sweep migration.
+                if (!isEmpty) {
+                  await provider.fetchFeeRate();
+                  if (!provider.feeRateReady) {
+                    if (!dashboardContext.mounted) return;
+                    _showMigrationBlockedDialog(
+                      dashboardContext,
+                      reason:
+                          'Smart fee is unavailable. Migration cannot continue safely right now.\n\n'
+                          'Details: ${provider.feeRateStatusMessage}',
+                    );
+                    return;
+                  }
+                }
+
+                // Safety gate 2: pending transactions must be fully confirmed before migration.
+                await provider.refreshBalance();
+                final latestWallet = provider.wallet;
+                if (latestWallet == null) return;
+                if (latestWallet.hasPending) {
+                  if (!dashboardContext.mounted) return;
+                  _showMigrationBlockedDialog(
+                    dashboardContext,
+                    reason:
+                        'Pending transactions detected. Migration cannot continue safely until all transactions are confirmed.\n\n'
+                        'Confirmed: ${latestWallet.balance.toStringAsFixed(8)} S256\n'
+                        'Unconfirmed: ${latestWallet.unconfirmedBalance.toStringAsFixed(8)} S256',
+                  );
+                  return;
+                }
+
+                var preferBatchSweep = false;
+                final migrationBatchPreview =
+                    await provider.assessMigrationBatchCandidate();
+                if (dashboardContext.mounted &&
+                    migrationBatchPreview['isCandidate'] == true) {
+                  final decision = await _showMigrationBatchDecisionDialog(
+                    dashboardContext,
+                    migrationBatchPreview,
+                  );
+                  if (decision != true) {
+                    return;
+                  }
+                  preferBatchSweep = true;
+                }
+
+                final success = await provider.migrateToSeed(
+                  words: _migrationSeedWords,
+                  preferBatchSweep: preferBatchSweep,
+                );
                 if (success && dashboardContext.mounted) {
                   _showBackupDialog(dashboardContext, provider);
                 }
@@ -1081,8 +1161,135 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
     );
   }
 
+  Future<bool?> _showMigrationBatchDecisionDialog(
+    BuildContext context,
+    Map<String, dynamic> preview,
+  ) async {
+    String reasonLabel(String reason) {
+      switch (reason) {
+        case 'input-count':
+          return 'High input count detected';
+        case 'tx-size':
+          return 'Large transaction size detected';
+        default:
+          return 'Multiple transactions required';
+      }
+    }
+
+    final reason = (preview['reason'] as String?) ?? 'none';
+    final inputCount = (preview['inputCount'] as int?) ?? 0;
+    final estimatedVbytes = (preview['estimatedVbytes'] as int?) ?? 0;
+    final estimatedBatchCount = (preview['estimatedBatchCount'] as int?) ?? 1;
+    final confirmedTotal = (preview['confirmedTotal'] as num?)?.toDouble() ?? 0.0;
+
+    return showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Row(
+            children: [
+              Icon(Icons.layers_rounded, color: Colors.orangeAccent),
+              SizedBox(width: 8),
+              Text('Batch Migration Required'),
+            ],
+          ),
+          content: SizedBox(
+            width: 520,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  reasonLabel(reason),
+                  style: const TextStyle(
+                      color: Colors.orangeAccent, fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'This migration cannot be completed safely in a single transaction. '
+                  'Batch migration will split the sweep into multiple broadcasts to your new seed wallet address.',
+                  style: TextStyle(color: Colors.white70),
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text('Confirmed balance',
+                        style: TextStyle(color: Colors.white60, fontSize: 12)),
+                    Text('${confirmedTotal.toStringAsFixed(8)} S256'),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text('Inputs to migrate',
+                        style: TextStyle(color: Colors.white60, fontSize: 12)),
+                    Text('$inputCount'),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text('Estimated single tx size',
+                        style: TextStyle(color: Colors.white60, fontSize: 12)),
+                    Text('$estimatedVbytes vB'),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text('Estimated batch tx count',
+                        style: TextStyle(color: Colors.white60, fontSize: 12)),
+                    Text('$estimatedBatchCount'),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                const Text(
+                  'Important: batch migration means multiple TXIDs. If a later batch fails, earlier batches may already be confirmed. '
+                  'You must back up the new seed phrase immediately after migration starts.',
+                  style: TextStyle(color: Colors.orangeAccent, fontSize: 11),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text('Proceed with Batch Migration'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _showMigrationBlockedDialog(BuildContext context, {required String reason}) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Migration Blocked'),
+        content: Text(reason),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildSendTab(WalletProvider provider) {
     final amountErr = _amountError(provider);
+    final feeSnapshot = _currentDisplayedFee(provider);
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(24),
@@ -1117,6 +1324,9 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                 ],
               ),
               const SizedBox(height: 32),
+
+              _buildFeeStateBanner(provider),
+              const SizedBox(height: 16),
 
               // Address field with live RPC validation
               TextField(
@@ -1162,6 +1372,14 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
               TextField(
                 controller: _amountController,
                 keyboardType: TextInputType.number,
+                inputFormatters: [
+                  TextInputFormatter.withFunction((oldValue, newValue) {
+                    final text = newValue.text;
+                    if (text.isEmpty) return newValue;
+                    final valid = RegExp(r'^\d*\.?\d{0,8}$').hasMatch(text);
+                    return valid ? newValue : oldValue;
+                  }),
+                ],
                 decoration: InputDecoration(
                   labelText: 'Amount (S256)',
                   hintText: '0.00000000',
@@ -1177,34 +1395,17 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                 ),
               ),
 
-              // Fee estimate (both modes)
-              Consumer<WalletProvider>(
-                builder: (context, provider, _) {
-                  final fee = _advancedSend && provider.selectedUtxoCount > 0
-                      ? provider.estimatedFee
-                      : provider.estimatedSimpleFee;
-                  final label = _advancedSend && provider.selectedUtxoCount > 0
-                      ? 'Est. fee'
-                      : 'Est. fee (typical tx)';
-                  if (fee <= 0) return const SizedBox.shrink();
-                  return Padding(
-                    padding: const EdgeInsets.only(top: 6, left: 4),
-                    child: Text(
-                      '$label: ${fee.toStringAsFixed(8)} S256',
-                      style: const TextStyle(fontSize: 12, color: Colors.grey),
-                    ),
-                  );
-                },
-              ),
+              const SizedBox(height: 12),
+              _buildFeeEstimate(provider, feeSnapshot),
+              const SizedBox(height: 8),
+              _buildFeeSourceSelector(provider),
 
               if (_advancedSend) ...[
                 const SizedBox(height: 32),
                 _buildUtxoSelector(provider),
               ],
-              if (_advancedSend && provider.selectedUtxoCount > 0) ...[
-                const SizedBox(height: 16),
-                _buildFeeEstimate(provider),
-              ],
+              const SizedBox(height: 12),
+              _buildSendPreview(provider, feeSnapshot),
               const SizedBox(height: 40),
 
               ElevatedButton(
@@ -1212,24 +1413,143 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                     || amountErr != null 
                     || _isValidatingAddress
                     || _toController.text.trim().isEmpty    
-                    || _addressValid != true                
+                    || _addressValid == false
                     ? null
                     : () async {
-                        provider.clearMessage();            
+                        provider.clearMessage();
                         final amount = double.tryParse(_amountController.text);
                         if (amount != null) {
-                          final success = await provider.sendTransaction(
+                          double? feeRateCoinPerKvB;
+                          if (provider.feeRateReady) {
+                            feeRateCoinPerKvB = provider.feeRate;
+                          } else {
+                            await provider.fetchFeeRate();
+                            if (provider.feeRateReady) {
+                              feeRateCoinPerKvB = provider.feeRate;
+                            } else if (mounted) {
+                              final manualFeeRate = await _showManualFeeDialog(context);
+                              if (manualFeeRate == null) return;
+                              provider.setManualFeeRate(manualFeeRate);
+                              feeRateCoinPerKvB = manualFeeRate;
+                            }
+                          }
+
+                          var preferBatchSend = true;
+                          while (mounted) {
+                            final batchPreview = await provider.assessBatchSendCandidate(
+                              _toController.text.trim(),
+                              amount,
+                              manualFeeRateCoinPerKb: feeRateCoinPerKvB,
+                            );
+                            if (batchPreview['isCandidate'] != true) {
+                              break;
+                            }
+
+                            final decision = await _showBatchDecisionDialog(
+                              context: context,
+                              provider: provider,
+                              amount: amount,
+                              preview: batchPreview,
+                            );
+                            if (decision == null || decision == 'cancel') return;
+
+                            if (decision == 'manual-fee') {
+                              final manualFeeRate = await _showManualFeeDialog(context);
+                              if (manualFeeRate == null) return;
+                              provider.setManualFeeRate(manualFeeRate);
+                              feeRateCoinPerKvB = manualFeeRate;
+                              continue;
+                            }
+
+                            preferBatchSend = decision == 'batch';
+                            break;
+                          }
+
+                          final confirmFeeSnapshot = _currentDisplayedFee(provider);
+                          final preConfirm = await _showPreSendConfirmDialog(
+                            context: context,
+                            provider: provider,
+                            toAddress: _toController.text.trim(),
+                            amount: amount,
+                            estimatedFee: confirmFeeSnapshot.fee,
+                            hasSelectedInputs:
+                                confirmFeeSnapshot.hasExactCoinControlFee,
+                          );
+                          if (!preConfirm) return;
+
+                          final result = await provider.sendTransaction(
                             _toController.text.trim(),
                             amount,
+                            manualFeeRateCoinPerKb: feeRateCoinPerKvB,
+                            preferBatchSend: preferBatchSend,
                           );
-                          if (success) {
-                            _toController.clear();
-                            _amountController.clear();
-                            setState(() {
-                              _addressValid = null;
-                              if (_advancedSend) _advancedSend = false;
-                            });
-                            provider.resetCoinControl();
+
+                          if (result['success'] != true &&
+                              result['requiresManualFee'] == true &&
+                              mounted) {
+                            final manualFeeRate = await _showManualFeeDialog(context);
+                            if (manualFeeRate != null) {
+                              provider.setManualFeeRate(manualFeeRate);
+                              final retryResult = await provider.sendTransaction(
+                                _toController.text.trim(),
+                                amount,
+                                manualFeeRateCoinPerKb: manualFeeRate,
+                                preferBatchSend: preferBatchSend,
+                              );
+                              if (retryResult['success'] == true) {
+                                _resetSendForm(provider);
+                                if (mounted) {
+                                  await _showSendAckFromResult(
+                                    context,
+                                    retryResult,
+                                    requestedAmount: amount,
+                                  );
+                                }
+                              }
+                            }
+                            return;
+                          }
+
+                          if (result['success'] != true &&
+                              !preferBatchSend &&
+                              mounted) {
+                            final message = (result['message'] as String?) ??
+                                'Transaction failed.';
+                            if (_isLikelyBatchFailureMessage(message)) {
+                              final retryAsBatch = await _showRetryBatchDialog(
+                                context: context,
+                                message: message,
+                              );
+                              if (retryAsBatch == true) {
+                                final retryResult = await provider.sendTransaction(
+                                  _toController.text.trim(),
+                                  amount,
+                                  manualFeeRateCoinPerKb: feeRateCoinPerKvB,
+                                  preferBatchSend: true,
+                                );
+                                if (retryResult['success'] == true) {
+                                  _resetSendForm(provider);
+                                  if (mounted) {
+                                    await _showSendAckFromResult(
+                                      context,
+                                      retryResult,
+                                      requestedAmount: amount,
+                                    );
+                                  }
+                                }
+                              }
+                            }
+                          }
+
+                          if (result['success'] == true) {
+                            _resetSendForm(provider);
+                            if (mounted) {
+                              await _showSendAckFromResult(
+                                context,
+                                result,
+                                requestedAmount: amount,
+                              );
+                            }
                           }
                         }
                       },
@@ -1269,6 +1589,1022 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
     final total = provider.selectedUtxoTotal;
     _amountController.text = total > 0 ? total.toStringAsFixed(8) : '';
   }
+
+  ({double fee, int? inputCount, bool amountAware}) _estimateSimpleModeFee(
+    WalletProvider provider,
+  ) {
+    final feeRate = provider.feeRate;
+    if (feeRate <= 0) {
+      return (fee: 0.0, inputCount: null, amountAware: false);
+    }
+
+    final confirmedUtxos = provider.availableUtxos
+        .map((u) => (u['amount'] as num?)?.toDouble() ?? 0.0)
+        .where((a) => a > 0)
+        .toList()
+      ..sort((a, b) => b.compareTo(a));
+
+    final enteredAmount = double.tryParse(_amountController.text.trim());
+    final hasAmount = enteredAmount != null && enteredAmount > 0;
+
+    int txSizeForInputs(int inputs) => 10 + (inputs * 148) + (2 * 34);
+    double feeForInputs(int inputs) =>
+        double.parse((feeRate * txSizeForInputs(inputs) / 1000).toStringAsFixed(8));
+
+    if (!hasAmount || confirmedUtxos.isEmpty) {
+      final fallbackInputs =
+          confirmedUtxos.isEmpty ? 2 : (confirmedUtxos.length >= 2 ? 2 : 1);
+      return (
+        fee: feeForInputs(fallbackInputs),
+        inputCount: fallbackInputs,
+        amountAware: false,
+      );
+    }
+
+    int inputsNeededFor(double requiredTotal) {
+      double total = 0.0;
+      int used = 0;
+      for (final amount in confirmedUtxos) {
+        total += amount;
+        used += 1;
+        if (total >= requiredTotal) {
+          return used;
+        }
+      }
+      return -1;
+    }
+
+    var guessInputs = 1;
+    for (var i = 0; i < 8; i++) {
+      final fee = feeForInputs(guessInputs);
+      final needed = inputsNeededFor(enteredAmount + fee);
+
+      if (needed <= 0) {
+        final fallbackInputs = confirmedUtxos.length >= 2 ? 2 : 1;
+        return (
+          fee: feeForInputs(fallbackInputs),
+          inputCount: fallbackInputs,
+          amountAware: false,
+        );
+      }
+
+      if (needed == guessInputs) {
+        return (fee: fee, inputCount: guessInputs, amountAware: true);
+      }
+
+      guessInputs = needed;
+    }
+
+    return (
+      fee: feeForInputs(guessInputs),
+      inputCount: guessInputs,
+      amountAware: true,
+    );
+  }
+
+  ({double fee, bool hasExactCoinControlFee, ({double fee, int? inputCount, bool amountAware}) simpleEstimate})
+      _currentDisplayedFee(WalletProvider provider) {
+    final hasExactCoinControlFee = _advancedSend && provider.selectedUtxoCount > 0;
+    final simpleEstimate = _estimateSimpleModeFee(provider);
+    final fee = hasExactCoinControlFee ? provider.estimatedFee : simpleEstimate.fee;
+    return (
+      fee: fee,
+      hasExactCoinControlFee: hasExactCoinControlFee,
+      simpleEstimate: simpleEstimate,
+    );
+  }
+
+  Widget _buildFeeStateBanner(WalletProvider provider) {
+    final bool warning = !provider.feeRateReady;
+    final Color color = warning ? Colors.orange : Colors.green;
+    final IconData icon = warning
+        ? Icons.warning_amber_rounded
+        : Icons.check_circle_outline_rounded;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withValues(alpha: 0.35)),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, color: color, size: 18),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              provider.feeRateStatusMessage,
+              style: TextStyle(
+                fontSize: 12,
+                color: warning ? Colors.orange.shade200 : Colors.green.shade200,
+              ),
+            ),
+          ),
+          if (warning)
+            TextButton(
+              onPressed: provider.isFetchingFeeRate
+                  ? null
+                  : () => provider.fetchFeeRate(),
+              child: const Text('Retry'),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFeeSourceSelector(WalletProvider provider) {
+    final manualSelected = provider.feeRateSource == 'manual';
+    final nodeSelected = _isNodeFeeSource(provider);
+    final currentColor = _feeSourceColor(provider);
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.05),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.white24),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'Fee Source',
+                style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+              ),
+              Text(
+                _feeSourceLabel(provider),
+                style: TextStyle(color: currentColor, fontWeight: FontWeight.w700),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: provider.isLoading
+                      ? null
+                      : () async {
+                          final manualFeeRate = await _showManualFeeDialog(context);
+                          if (manualFeeRate != null) {
+                            provider.setManualFeeRate(manualFeeRate);
+                          }
+                        },
+                  style: OutlinedButton.styleFrom(
+                    side: BorderSide(
+                      color: manualSelected ? Colors.cyanAccent : Colors.white30,
+                      width: manualSelected ? 1.6 : 1.0,
+                    ),
+                    backgroundColor: manualSelected
+                        ? Colors.cyanAccent.withValues(alpha: 0.16)
+                        : Colors.transparent,
+                    foregroundColor:
+                        manualSelected ? Colors.cyanAccent : Colors.white70,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                  ),
+                  child: const Text('Manual'),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: provider.isFetchingFeeRate
+                      ? null
+                      : () => provider.fetchFeeRate(),
+                  style: OutlinedButton.styleFrom(
+                    side: BorderSide(
+                      color: nodeSelected ? Colors.greenAccent : Colors.white30,
+                      width: nodeSelected ? 1.6 : 1.0,
+                    ),
+                    backgroundColor: nodeSelected
+                        ? Colors.greenAccent.withValues(alpha: 0.14)
+                        : Colors.transparent,
+                    foregroundColor:
+                        nodeSelected ? Colors.greenAccent : Colors.white70,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                  ),
+                  child: const Text('Auto (Node Fee)'),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<double?> _showManualFeeDialog(BuildContext context) async {
+    final controller = TextEditingController();
+    String? error;
+    bool satPerVb = true;
+
+    const lowS256KvB = 0.00000226;
+    const highS256KvB = 0.0004;
+    const satVbToS256KvB = 0.00001;
+    final lowSatVb = lowS256KvB / satVbToS256KvB;
+    final highSatVb = highS256KvB / satVbToS256KvB;
+
+    controller.text = lowSatVb.toStringAsFixed(4);
+
+    final result = await showDialog<double>(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: const Text('Manual Fee Required'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Automatic fee estimation is unavailable. Enter a manual fee rate to continue.',
+                    style: TextStyle(fontSize: 13),
+                  ),
+                  const SizedBox(height: 12),
+                  ToggleButtons(
+                    isSelected: [satPerVb, !satPerVb],
+                    onPressed: (index) {
+                      setDialogState(() {
+                        final nextSatVb = index == 0;
+                        final parsed = double.tryParse(controller.text.trim());
+                        if (parsed != null && parsed > 0 && nextSatVb != satPerVb) {
+                          final converted = nextSatVb
+                              ? parsed / satVbToS256KvB
+                              : parsed * satVbToS256KvB;
+                          controller.text = nextSatVb
+                              ? converted.toStringAsFixed(4)
+                              : converted.toStringAsFixed(8);
+                        }
+                        satPerVb = nextSatVb;
+                        error = null;
+                      });
+                    },
+                    borderRadius: BorderRadius.circular(8),
+                    children: const [
+                      Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 12),
+                        child: Text('sat/vB'),
+                      ),
+                      Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 12),
+                        child: Text('S256/kvB'),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    'Low traffic: ${lowSatVb.toStringAsFixed(3)} sat/vB (${lowS256KvB.toStringAsFixed(8)} S256/kvB)',
+                    style: const TextStyle(fontSize: 12, color: Colors.grey),
+                  ),
+                  Text(
+                    'High traffic: ${highSatVb.toStringAsFixed(3)} sat/vB (${highS256KvB.toStringAsFixed(8)} S256/kvB)',
+                    style: const TextStyle(fontSize: 12, color: Colors.grey),
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      OutlinedButton(
+                        onPressed: () {
+                          setDialogState(() {
+                            controller.text = satPerVb
+                                ? lowSatVb.toStringAsFixed(4)
+                                : lowS256KvB.toStringAsFixed(8);
+                            error = null;
+                          });
+                        },
+                        child: const Text('Use Low'),
+                      ),
+                      const SizedBox(width: 8),
+                      OutlinedButton(
+                        onPressed: () {
+                          setDialogState(() {
+                            controller.text = satPerVb
+                                ? highSatVb.toStringAsFixed(4)
+                                : highS256KvB.toStringAsFixed(8);
+                            error = null;
+                          });
+                        },
+                        child: const Text('Use High'),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: controller,
+                    keyboardType:
+                        const TextInputType.numberWithOptions(decimal: true),
+                    decoration: InputDecoration(
+                      labelText:
+                          satPerVb ? 'Fee rate (sat/vB)' : 'Fee rate (S256/kvB)',
+                      hintText: satPerVb
+                          ? 'e.g. ${lowSatVb.toStringAsFixed(4)}'
+                          : 'e.g. ${lowS256KvB.toStringAsFixed(8)}',
+                      errorText: error,
+                    ),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext),
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton(
+                  onPressed: () {
+                    final raw = double.tryParse(controller.text.trim());
+                    if (raw == null || raw <= 0) {
+                      setDialogState(() {
+                        error = 'Enter a valid fee rate greater than zero.';
+                      });
+                      return;
+                    }
+
+                    final feeRateCoinPerKb = satPerVb ? (raw * satVbToS256KvB) : raw;
+                    if (feeRateCoinPerKb <= 0) {
+                      setDialogState(() {
+                        error = 'Converted fee rate is invalid.';
+                      });
+                      return;
+                    }
+
+                    Navigator.pop(dialogContext, feeRateCoinPerKb);
+                  },
+                  child: const Text('Use Fee Rate'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    controller.dispose();
+    return result;
+  }
+
+  void _resetSendForm(WalletProvider provider) {
+    _toController.clear();
+    _amountController.clear();
+    setState(() {
+      _addressValid = null;
+      if (_advancedSend) _advancedSend = false;
+    });
+    provider.resetCoinControl();
+  }
+
+  Future<bool> _showPreSendConfirmDialog({
+    required BuildContext context,
+    required WalletProvider provider,
+    required String toAddress,
+    required double amount,
+    required double estimatedFee,
+    required bool hasSelectedInputs,
+  }) async {
+    final feeSource = _feeSourceLabel(provider);
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        final sourceColor = _feeSourceColor(provider);
+        return AlertDialog(
+          title: const Row(
+            children: [
+              Icon(Icons.shield_outlined, color: Colors.cyanAccent, size: 22),
+              SizedBox(width: 8),
+              Text('Confirm Transaction'),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.05),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.white24),
+                ),
+                child: Text('To: $toAddress', style: const TextStyle(fontSize: 12)),
+              ),
+              const SizedBox(height: 10),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text('Amount',
+                      style: TextStyle(color: Colors.white60, fontSize: 12)),
+                  Text(
+                    '${amount.toStringAsFixed(8)} S256',
+                    style: const TextStyle(
+                        color: Colors.white, fontWeight: FontWeight.w600),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text('Estimated Fee',
+                      style: TextStyle(color: Colors.white60, fontSize: 12)),
+                  Text(
+                    '${estimatedFee.toStringAsFixed(8)} S256',
+                    style: const TextStyle(
+                        color: Colors.cyanAccent, fontWeight: FontWeight.w600),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text('Fee Source',
+                      style: TextStyle(color: Colors.white60, fontSize: 12)),
+                  Text(
+                    feeSource,
+                    style: TextStyle(color: sourceColor, fontWeight: FontWeight.w600),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'Fee rate: ${provider.feeRate.toStringAsFixed(8)} S256/kvB '
+                '(${_formatSatVb(provider.feeRate)} sat/vB)',
+                style: const TextStyle(color: Colors.white70),
+              ),
+              if (hasSelectedInputs) ...[
+                const SizedBox(height: 6),
+                Text(
+                  'Selected inputs: ${provider.selectedUtxoCount}',
+                  style: const TextStyle(color: Colors.white70),
+                ),
+              ],
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text('Agree & Send'),
+            ),
+          ],
+        );
+      },
+    );
+
+    return confirmed ?? false;
+  }
+
+  Future<void> _showPostSendAckDialog({
+    required BuildContext context,
+    required String txid,
+    required double amount,
+    required double fee,
+  }) async {
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Row(
+            children: [
+              Icon(Icons.check_circle, color: Colors.greenAccent, size: 24),
+              SizedBox(width: 8),
+              Text('Transaction Sent'),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Colors.green.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.green.withValues(alpha: 0.35)),
+                ),
+                child: const Text(
+                  'Broadcasted to network',
+                  style: TextStyle(
+                    color: Colors.greenAccent,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text('Amount Sent',
+                      style: TextStyle(color: Colors.white54, fontSize: 12)),
+                  Text(
+                    '${amount.toStringAsFixed(8)} S256',
+                    style: const TextStyle(
+                        color: Colors.white, fontWeight: FontWeight.w600),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text('Network Fee Paid',
+                      style: TextStyle(color: Colors.white54, fontSize: 12)),
+                  Text(
+                    '${fee.toStringAsFixed(8)} S256',
+                    style: const TextStyle(
+                        color: Colors.cyanAccent, fontWeight: FontWeight.w600),
+                  ),
+                ],
+              ),
+              if (txid.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                const Text('TXID',
+                    style:
+                        TextStyle(color: Colors.white60, fontWeight: FontWeight.w600)),
+                const SizedBox(height: 4),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.black,
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: Colors.white24),
+                  ),
+                  child: SelectableText(
+                    txid,
+                    style: const TextStyle(
+                        fontSize: 12,
+                        fontFamily: 'monospace',
+                        color: Colors.cyanAccent),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton.icon(
+                    onPressed: () async {
+                      await Clipboard.setData(ClipboardData(text: txid));
+                      if (!mounted) return;
+                      ScaffoldMessenger.of(dialogContext).showSnackBar(
+                        const SnackBar(content: Text('TXID copied')),
+                      );
+                    },
+                    icon: const Icon(Icons.copy, size: 16),
+                    label: const Text('Copy TXID'),
+                  ),
+                ),
+              ],
+            ],
+          ),
+          actions: [
+            ElevatedButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Acknowledge'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<String?> _showBatchDecisionDialog({
+    required BuildContext context,
+    required WalletProvider provider,
+    required double amount,
+    required Map<String, dynamic> preview,
+  }) async {
+    String reasonLabel(String reason) {
+      switch (reason) {
+        case 'sweep-too-large':
+          return 'Large sweep detected';
+        case 'input-count':
+          return 'High input count detected';
+        case 'tx-size':
+          return 'Large transaction size detected';
+        default:
+          return 'Batch candidate detected';
+      }
+    }
+
+    final reason = (preview['reason'] as String?) ?? 'none';
+    final predictedInputs = (preview['predictedInputCount'] as int?) ?? 0;
+    final predictedVbytes = (preview['predictedVbytes'] as int?) ?? 0;
+    final estimatedBatchCount = (preview['estimatedBatchCount'] as int?) ?? 1;
+    final estimatedSingleFee =
+        (preview['estimatedSingleFee'] as num?)?.toDouble() ?? 0.0;
+    final estimatedTotalBatchFee =
+        (preview['estimatedTotalBatchFee'] as num?)?.toDouble() ?? 0.0;
+    final estimatedNetDelivered =
+        (preview['estimatedNetDelivered'] as num?)?.toDouble() ??
+            (amount - estimatedTotalBatchFee);
+    final usingManualFee = provider.feeRateSource == 'manual';
+
+    return showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Row(
+            children: [
+              Icon(Icons.layers_rounded, color: Colors.orangeAccent),
+              SizedBox(width: 8),
+              Text('Batch Send Suggested'),
+            ],
+          ),
+          content: SizedBox(
+            width: 520,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  reasonLabel(reason),
+                  style: const TextStyle(
+                      color: Colors.orangeAccent, fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'This transfer may exceed safe single-transaction limits. '
+                  'You can batch it into multiple broadcasts or continue with normal send.',
+                  style: TextStyle(color: Colors.white70),
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text('Requested amount',
+                        style: TextStyle(color: Colors.white60, fontSize: 12)),
+                    Text('${amount.toStringAsFixed(8)} S256'),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text('Predicted inputs',
+                        style: TextStyle(color: Colors.white60, fontSize: 12)),
+                    Text('$predictedInputs'),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text('Predicted tx size',
+                        style: TextStyle(color: Colors.white60, fontSize: 12)),
+                    Text('$predictedVbytes vB'),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text('Estimated batch count',
+                        style: TextStyle(color: Colors.white60, fontSize: 12)),
+                    Text('$estimatedBatchCount'),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text('Est. single fee',
+                        style: TextStyle(color: Colors.white60, fontSize: 12)),
+                    Text('${estimatedSingleFee.toStringAsFixed(8)} S256'),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text('Est. total batch fee',
+                        style: TextStyle(color: Colors.white60, fontSize: 12)),
+                    Text('${estimatedTotalBatchFee.toStringAsFixed(8)} S256'),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text('Est. net delivered',
+                        style: TextStyle(color: Colors.white60, fontSize: 12)),
+                    Text('${estimatedNetDelivered.toStringAsFixed(8)} S256'),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'Estimates may vary depending on final input selection and mempool conditions.',
+                  style: TextStyle(color: Colors.white38, fontSize: 11),
+                ),
+                if (!usingManualFee) ...[
+                  const SizedBox(height: 8),
+                  const Text(
+                    'You are currently using node-estimated fee. For batch sends, consider setting a manual fee first for more predictable total cost.',
+                    style: TextStyle(color: Colors.orangeAccent, fontSize: 11),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, 'cancel'),
+              child: const Text('Cancel'),
+            ),
+            if (!usingManualFee)
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext, 'manual-fee'),
+                child: const Text('Set Manual Fee'),
+              ),
+            OutlinedButton(
+              onPressed: () => Navigator.pop(dialogContext, 'normal'),
+              child: const Text('Normal Send'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(dialogContext, 'batch'),
+              child: const Text('Batch Send'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  bool _isLikelyBatchFailureMessage(String message) {
+    final normalized = message.toLowerCase();
+    return normalized.contains('too many') ||
+        normalized.contains('tx-size') ||
+        normalized.contains('tx size') ||
+        normalized.contains('oversize') ||
+        normalized.contains('too large') ||
+        normalized.contains('too-long-mempool-chain') ||
+        normalized.contains('mempool chain') ||
+        normalized.contains('non-bip68-final') ||
+        normalized.contains('insufficient fee') ||
+        normalized.contains('rejecting replacement');
+  }
+
+  Future<bool?> _showRetryBatchDialog({
+    required BuildContext context,
+    required String message,
+  }) async {
+    return showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Row(
+            children: [
+              Icon(Icons.warning_amber_rounded, color: Colors.orangeAccent),
+              SizedBox(width: 8),
+              Text('Normal Send Failed'),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'This failure may be caused by single-transaction size or mempool constraints.',
+                style: TextStyle(color: Colors.white70),
+              ),
+              const SizedBox(height: 8),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.05),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.white24),
+                ),
+                child: Text(message, style: const TextStyle(fontSize: 12)),
+              ),
+              const SizedBox(height: 10),
+              const Text(
+                'Retry now using Batch Send?',
+                style: TextStyle(fontWeight: FontWeight.w600),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text('Retry as Batch'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _showSendAckFromResult(
+    BuildContext context,
+    Map<String, dynamic> result, {
+    required double requestedAmount,
+  }) async {
+    final batchTxids = (result['batchTxids'] as List<dynamic>? ?? [])
+        .map((e) => e.toString())
+        .where((txid) => txid.isNotEmpty)
+        .toList();
+    final batched = (result['batched'] == true) || batchTxids.isNotEmpty;
+
+    if (batched) {
+      await _showBatchSendAckDialog(
+        context: context,
+        txids: batchTxids,
+        requestedAmount: requestedAmount,
+        grossAmount: (result['grossAmount'] as num?)?.toDouble(),
+        totalFee: (result['fee'] as num?)?.toDouble() ?? 0.0,
+        netAmount: (result['netAmount'] as num?)?.toDouble(),
+      );
+      return;
+    }
+
+    await _showPostSendAckDialog(
+      context: context,
+      txid: (result['txid'] as String?) ?? '',
+      amount: requestedAmount,
+      fee: (result['fee'] as num?)?.toDouble() ?? 0.0,
+    );
+  }
+
+  Future<void> _showBatchSendAckDialog({
+    required BuildContext context,
+    required List<String> txids,
+    required double requestedAmount,
+    required double totalFee,
+    double? grossAmount,
+    double? netAmount,
+  }) async {
+    final displayedGross = grossAmount ?? requestedAmount;
+    final displayedNet = netAmount ?? (displayedGross - totalFee);
+
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Row(
+            children: [
+              Icon(Icons.fact_check_rounded, color: Colors.greenAccent, size: 24),
+              SizedBox(width: 8),
+              Text('Batch Send Complete'),
+            ],
+          ),
+          content: SizedBox(
+            width: 520,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Broadcasted ${txids.length} transaction${txids.length == 1 ? '' : 's'}.',
+                  style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text('Requested Amount', style: TextStyle(color: Colors.white54, fontSize: 12)),
+                    Text('${requestedAmount.toStringAsFixed(8)} S256', style: const TextStyle(fontWeight: FontWeight.w600)),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text('Gross Sent', style: TextStyle(color: Colors.white54, fontSize: 12)),
+                    Text('${displayedGross.toStringAsFixed(8)} S256', style: const TextStyle(fontWeight: FontWeight.w600)),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text('Total Fee Paid', style: TextStyle(color: Colors.white54, fontSize: 12)),
+                    Text('${totalFee.toStringAsFixed(8)} S256', style: const TextStyle(color: Colors.cyanAccent, fontWeight: FontWeight.w600)),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text('Estimated Net Delivered', style: TextStyle(color: Colors.white54, fontSize: 12)),
+                    Text('${displayedNet.toStringAsFixed(8)} S256', style: const TextStyle(fontWeight: FontWeight.w600)),
+                  ],
+                ),
+                if (txids.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  const Text('Batch TXIDs', style: TextStyle(color: Colors.white60, fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 4),
+                  Container(
+                    width: double.infinity,
+                    constraints: const BoxConstraints(maxHeight: 180),
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.black,
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: Colors.white24),
+                    ),
+                    child: SingleChildScrollView(
+                      child: SelectableText(
+                        txids.join('\n'),
+                        style: const TextStyle(fontSize: 12, fontFamily: 'monospace', color: Colors.cyanAccent),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton.icon(
+                      onPressed: () async {
+                        await Clipboard.setData(ClipboardData(text: txids.join('\n')));
+                        if (!mounted) return;
+                        ScaffoldMessenger.of(dialogContext).showSnackBar(
+                          const SnackBar(content: Text('Batch TXIDs copied')),
+                        );
+                      },
+                      icon: const Icon(Icons.copy, size: 16),
+                      label: const Text('Copy TXIDs'),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          actions: [
+            ElevatedButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Acknowledge'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  bool _isNodeFeeSource(WalletProvider provider) {
+    const nodeSources = {'estimated', 'baseline', 'clamped'};
+    return nodeSources.contains(provider.feeRateSource);
+  }
+
+  String _feeSourceLabel(WalletProvider provider) {
+    switch (provider.feeRateSource) {
+      case 'manual':
+        return 'Manual';
+      case 'estimated':
+        return 'Node Estimator';
+      case 'clamped':
+        return 'Node Baseline (Clamped)';
+      case 'baseline':
+        return 'Node Baseline';
+      case 'fetching':
+        return 'Fetching...';
+      default:
+        return 'Unavailable';
+    }
+  }
+
+  Color _feeSourceColor(WalletProvider provider) {
+    switch (provider.feeRateSource) {
+      case 'manual':
+        return Colors.cyanAccent;
+      case 'estimated':
+        return Colors.greenAccent;
+      case 'clamped':
+      case 'baseline':
+        return Colors.orangeAccent;
+      case 'fetching':
+        return Colors.amberAccent;
+      default:
+        return Colors.redAccent;
+    }
+  }
+
+  String _formatSatVb(double feeRateCoinPerKvB) {
+    final satVb = feeRateCoinPerKvB * 100000;
+    if (satVb >= 100) return satVb.toStringAsFixed(0);
+    if (satVb >= 10) return satVb.toStringAsFixed(1);
+    return satVb.toStringAsFixed(2);
+  }
+
+  int _s256ToSats(double coins) => (coins * 1e8).round();
+  double _satsToS256(int sats) => sats / 1e8;
 
   Widget _buildUtxoSelector(WalletProvider provider) {
     if (provider.isLoadingUtxos) {
@@ -1423,7 +2759,9 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                         SizedBox(
                           width: 52,
                           child: Text(
-                            '${utxo['confirmations']}',
+                            _formatCompactConfirmationCount(
+                              (utxo['confirmations'] as num?)?.toInt() ?? 0,
+                            ),
                             style: const TextStyle(fontSize: 12, color: Colors.grey),
                             textAlign: TextAlign.center,
                           ),
@@ -1451,7 +2789,37 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
     );
   }
 
-  Widget _buildFeeEstimate(WalletProvider provider) {
+  Widget _buildFeeEstimate(
+    WalletProvider provider,
+    ({double fee, bool hasExactCoinControlFee, ({double fee, int? inputCount, bool amountAware}) simpleEstimate})
+        feeSnapshot,
+  ) {
+    final hasSelectedInputs = feeSnapshot.hasExactCoinControlFee;
+    final simpleEstimate = feeSnapshot.simpleEstimate;
+    final fee = feeSnapshot.fee;
+    final label = hasSelectedInputs ? 'Est. fee' : 'Estimated Network Fee';
+
+    if (provider.isFetchingFeeRate) {
+      return const Padding(
+        padding: EdgeInsets.only(top: 6, left: 4),
+        child: Text(
+          'Fetching fee estimate...',
+          style: TextStyle(fontSize: 12, color: Colors.grey),
+        ),
+      );
+    }
+
+    if (fee <= 0) return const SizedBox.shrink();
+
+    final feeRate = provider.feeRate;
+    final feeRateSatVb = _formatSatVb(feeRate);
+    final feeSource = _feeSourceLabel(provider);
+    final detailsLabel = hasSelectedInputs
+        ? 'Size-aware estimate for ${provider.selectedUtxoCount} selected input(s)'
+        : simpleEstimate.amountAware
+            ? 'Amount-aware estimate using ~${simpleEstimate.inputCount ?? 1} input(s)'
+            : 'Simple mode estimate using ~${simpleEstimate.inputCount ?? 2} input(s)';
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
@@ -1459,33 +2827,159 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
       ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text('Est. fee', style: TextStyle(fontSize: 11, color: Colors.grey)),
-              const SizedBox(height: 2),
+              Text(label, style: const TextStyle(fontSize: 11, color: Colors.grey)),
               Text(
-                '${provider.estimatedFee.toStringAsFixed(8)} S256',
-                style: const TextStyle(fontSize: 13),
+                '$feeSource source',
+                style: const TextStyle(fontSize: 11, color: Colors.grey),
               ),
             ],
           ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
+          const SizedBox(height: 2),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text('Net send', style: TextStyle(fontSize: 11, color: Colors.grey)),
-              const SizedBox(height: 2),
               Text(
-                provider.estimatedNetSend > 0
-                    ? '${provider.estimatedNetSend.toStringAsFixed(8)} S256'
-                    : '—',
-                style: TextStyle(
-                  fontSize: 13,
-                  color: provider.estimatedNetSend > 0 ? Colors.white : Colors.red,
+                '${fee.toStringAsFixed(8)} S256',
+                style: const TextStyle(fontSize: 13),
+              ),
+              if (hasSelectedInputs)
+                Text(
+                  provider.estimatedNetSend > 0
+                      ? 'Net ${provider.estimatedNetSend.toStringAsFixed(8)} S256'
+                      : 'Net -',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: provider.estimatedNetSend > 0 ? Colors.white : Colors.red,
+                  ),
                 ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Rate: ${feeRate.toStringAsFixed(8)} S256/kvB ($feeRateSatVb sat/vB)',
+            style: const TextStyle(fontSize: 11, color: Colors.grey),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            detailsLabel,
+            style: const TextStyle(fontSize: 11, color: Colors.grey),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSendPreview(
+    WalletProvider provider,
+    ({double fee, bool hasExactCoinControlFee, ({double fee, int? inputCount, bool amountAware}) simpleEstimate})
+        feeSnapshot,
+  ) {
+    final amount = double.tryParse(_amountController.text.trim()) ?? 0.0;
+    if (amount <= 0) return const SizedBox.shrink();
+
+    final hasSelectedInputs = feeSnapshot.hasExactCoinControlFee;
+    final fee = feeSnapshot.fee;
+
+    final selectedInputsSats =
+        hasSelectedInputs ? _s256ToSats(provider.selectedUtxoTotal) : 0;
+    final autoSpendableSats = _s256ToSats(provider.wallet?.balance ?? 0.0);
+    final amountSats = _s256ToSats(amount);
+    final feeSats = _s256ToSats(fee);
+    final expectedChangeSats = hasSelectedInputs
+        ? (selectedInputsSats - amountSats - feeSats)
+        : (autoSpendableSats - amountSats - feeSats);
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.05),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.white10),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Transaction Preview',
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text('Selected Inputs',
+                  style: TextStyle(color: Colors.white60, fontSize: 12)),
+              Text(
+                hasSelectedInputs
+                    ? '${_satsToS256(selectedInputsSats).toStringAsFixed(8)} S256'
+                    : 'Auto',
+                style: const TextStyle(color: Colors.white, fontSize: 12),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text('Send Amount',
+                  style: TextStyle(color: Colors.white60, fontSize: 12)),
+              Text(
+                '${_satsToS256(amountSats).toStringAsFixed(8)} S256',
+                style: const TextStyle(color: Colors.white, fontSize: 12),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text('Estimated Fee',
+                  style: TextStyle(color: Colors.white60, fontSize: 12)),
+              Text(
+                '${fee.toStringAsFixed(8)} S256',
+                style: const TextStyle(color: Colors.white, fontSize: 12),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text('Fee Source',
+                  style: TextStyle(color: Colors.white60, fontSize: 12)),
+              Text(
+                _feeSourceLabel(provider),
+                style: TextStyle(color: _feeSourceColor(provider), fontSize: 12),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text('Fee Rate',
+                  style: TextStyle(color: Colors.white60, fontSize: 12)),
+              Text(
+                '${provider.feeRate.toStringAsFixed(8)} S256/kvB (${_formatSatVb(provider.feeRate)} sat/vB)',
+                style: const TextStyle(color: Colors.white, fontSize: 12),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text('Expected Change',
+                  style: TextStyle(color: Colors.white60, fontSize: 12)),
+              Text(
+                '${_satsToS256(expectedChangeSats > 0 ? expectedChangeSats : 0).toStringAsFixed(8)} S256',
+                style: const TextStyle(color: Colors.white, fontSize: 12),
               ),
             ],
           ),
@@ -1566,6 +3060,30 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
           subtitle: Text(provider.wallet!.type == WalletType.seed ? 'Seed Phrase' : 'WIF Private Key'),
         ),
         const Divider(),
+        SwitchListTile(
+          value: provider.rememberSessionEnabled,
+          onChanged: (value) async {
+            await provider.setRememberSessionEnabled(value);
+            if (!mounted) return;
+            if (value && !provider.hasSessionEncryptionSecret) {
+              _showSessionSecurityInfo(context, missingSecret: true);
+            }
+          },
+          title: const Text('Remember Wallet On This Device'),
+          subtitle: Text(
+            provider.rememberSessionEnabled
+                ? 'Enabled: encrypted wallet session is persisted in browser local storage.'
+                : 'Disabled: you must re-enter keys/seed after logout or tab close.',
+          ),
+          secondary: const Icon(Icons.lock_outline_rounded),
+        ),
+        ListTile(
+          onTap: () => _showSessionSecurityInfo(context),
+          title: const Text('Session Persistence Security Notes'),
+          subtitle: const Text('Read risks before enabling remembered session.'),
+          trailing: const Icon(Icons.info_outline_rounded),
+        ),
+        const Divider(),
         ListTile(
           onTap: () => _showBackupDialog(context, provider),
           title: const Text('Backup Wallet'),
@@ -1598,7 +3116,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
         const SizedBox(height: 10),
         const Padding(
               padding: EdgeInsets.symmetric(horizontal: 16),
-              child: Text('S256 Web-Wallet version 2.5', 
+              child: Text('S256 Web-Wallet version 2.6.0 - 2026-08-02 - SHA256 Coin Core', 
               style: TextStyle(color: Colors.white54, fontSize: 12),
               textAlign: TextAlign.center
         ),      
@@ -1678,6 +3196,50 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close')),
+        ],
+      ),
+    );
+  }
+
+  void _showSessionSecurityInfo(BuildContext context, {bool missingSecret = false}) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Remembered Session Security'),
+        content: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (missingSecret)
+                const Text(
+                  'SESSION_ENCRYPTION_SECRET_HEX is missing in your dart defines. Add a 64-char hex key before enabling this feature.',
+                  style: TextStyle(color: Colors.orangeAccent, fontWeight: FontWeight.bold),
+                ),
+              if (missingSecret) const SizedBox(height: 12),
+              const Text('What this does:'),
+              const SizedBox(height: 6),
+              const Text('• Stores an encrypted wallet session in browser local storage.'),
+              const Text('• Allows automatic wallet restore without re-entering seed/WIF.'),
+              const SizedBox(height: 12),
+              const Text('Security risks:'),
+              const SizedBox(height: 6),
+              const Text('• Any malware or malicious browser extension on this device may still extract data while unlocked.'),
+              const Text('• Dart define secrets in a web app can be extracted from the shipped bundle; this is defense-in-depth, not absolute secrecy.'),
+              const Text('• Shared/public computers should never enable remembered sessions.'),
+              const SizedBox(height: 12),
+              const Text(
+                'Recommendation: keep this OFF for high-value wallets. Use hardware or offline storage for long-term holdings.',
+                style: TextStyle(fontWeight: FontWeight.w600),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Close'),
+          ),
         ],
       ),
     );

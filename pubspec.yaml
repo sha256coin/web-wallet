@@ -1,7 +1,7 @@
 name: s256_web_wallet
 description: Simple S256 coin web wallet - Load, Send, Receive
-publish_to: 'none'
-version: 1.0.0
+publish_to: "none"
+version: 2.6.0
 
 environment:
   sdk: ^3.5.1
@@ -43,7 +43,7 @@ flutter:
   assets:
     - assets/logo.png
     - assets/icons/
-    
+
 flutter_launcher_icons:
   image_path: "assets/logo.png"
   image_path_android: "assets/logo.png"

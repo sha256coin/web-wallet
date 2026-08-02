@@ -1,6 +1,8 @@
 # S256 Coin Web-Wallet
 
-A modern, secure, non-custodial, client-side signing wallet for the SHA256 Coin network. This version introduces significant architectural improvements, seed phrase support, and a built-in migration tool.
+![Version](https://img.shields.io/badge/release-v2.6-1f6feb)
+
+A modern, secure, non-custodial web wallet for the SHA256 Coin network. Private keys remain client-side and transactions are signed locally in the browser.
 
 <p align="center">
   <img src="assets/s256_brand.png" alt="S256 Web-Wallet" width="128">
@@ -16,125 +18,87 @@ A modern, secure, non-custodial, client-side signing wallet for the SHA256 Coin 
   <a href="https://explorer.sha256coin.eu">Explorer</a>
 </p>
 
-## 🚀 What's New in v2.5
+## Current Version
 
-### 🪙 Coin Control (Advanced Send)
-Full control over which UTXOs are used in a transaction:
-- **Advanced UI**: Manually hand-pick inputs from your confirmed UTXO set.
-- **Live Summary**: Instant updates on total selected inputs and transaction size.
-- **Management**: Scrollable UTXO list with index, TXID, amount, and confirmation status.
-- **Flexibility**: Built-in 'All / None' selectors for rapid management.
+- **Release:** `v2.6`
+- **Package Version:** `2.6.0` (see `pubspec.yaml`)
+- **Release Notes:** `CHANGELOG.MD`
 
-### 💸 Fee Estimation
-- **Dynamic Calculation**: Real-time vByte estimation based on input/output count.
-- **Smart Rates**: Integrated `estimatesmartfee` integration for market-accurate fees.
-- **Net Send Display**: Always know exactly what the recipient receives after miner fees.
+## Release Highlights (v2.6)
 
-### ✅ Validation & Guardrails
-- **Real-time RPC Validation**: Address format verified via node-side `validateaddress` (700ms debounce).
-- **Hard Guards**: Prevents dust inputs (< 0.00000546), negative amounts, and insufficient balance errors before the 'Send' button is ever active.
+This release focuses on wallet parity, safer transaction handling, and improved session controls.
 
-### 📈 Precision Data
-- **Confirmation Accuracy**: Real-time confirmation tracking calculated via `getblockcount` - `utxo.height`.
-- **Address-Agnostic Routing**: Native support for **Native SegWit (s2...)**, **Legacy P2PKH (S...)**, and **Legacy P2SH (8...)** address types with automatic script generation.
+- **Advanced send parity:** richer send flow with robust fee handling, manual fee fallback, and clear transaction result metadata.
+- **Migration send parity:** stronger migration guardrails and batch migration handling.
+- **Signer hardening:** improved signature normalization and safer scriptCode derivation in signing internals.
+- **Session persistence controls:** optional encrypted remembered-session support with settings-level user control.
+
+For full version history and details, see `CHANGELOG.MD`.
 
 ---
 
-## 🛡️ Security Architecture
-This version marks a major shift in our security model:
-- **Client-Side Signing**: Transactions are signed locally in the browser. Private keys (WIF) and seed phrases never touch the network/server.
-- **Zero-Trust Broadcast**: The RPC node only receives a signed transaction hex; it never sees your private keys or your balance information.
-- **Web Runtime Optimized**: Logic refactored to support strict `dart2js` environment constraints (e.g., custom 64-bit integer handling).
+## Security Architecture
 
----
+- **Client-Side Signing:** Transactions are signed locally in the browser; private keys and seed phrases are never sent to RPC endpoints.
+- **Zero-Trust Broadcast:** The node receives signed transaction hex only.
+- **Session Safety:** Default behavior is ephemeral session state; optional encrypted session persistence can be enabled by the user.
 
-## 🏗️ Technical Stack
-- **Derivation**: BIP39 Mnemonic Seed / BIP44 Standard Paths.
-- **Cryptography**: PointyCastle (RIPEMD160/SHA256).
-- **Frontend**: Flutter Web (Optimized for performance).
-- **Communication**: JSON-RPC over HTTPS.
+## Technical Stack
 
-## Major Updates in v2.4
-
-### 💰 Live price update fetched directly from LiveCoinWatch
-- Sha256Coin price is aquired directly from LiveCoinWatch and updated every 5 minutes.
-- Wallet balance is converted in USD and displayed to keep user informed about price fluctuations.
-
-### 🏗️ Modular Architecture
-The project has been refactored from a monolithic structure to a scalable, modular architecture using the **Provider** pattern:
-- **Models**: Structured data objects for Wallets and Transactions.
-- **Providers**: Centralized state management for UI reactivity.
-- **Services**: Dedicated logic for cryptography, storage, and RPC communication.
-- **Screens**: Dedicated UI layers for Welcome, Setup, Dashboard, and Network Info.
-
-### 🌱 Seed Phrase Support (BIP39)
-Moving beyond raw private keys, the wallet now supports modern **BIP39 Seed Phrases**:
-- **Generate 12 or 24 words**: Choose your desired security level.
-- **BIP44 Derivation**: Industry-standard derivation paths for maximum compatibility.
-- **Secure Backup UI**: Dedicated interface to ensure users save their phrases correctly.
-
-### 🔄 WIF-to-Seed Migration (Sweep)
-A unique tool to help legacy users upgrade to modern security:
-- **Automatic Sweep**: Transfer all funds from a legacy WIF key to a new Seed-derived address in one click.
-- **Smart Handling**: If the wallet is empty, it upgrades the wallet type instantly without requiring a blockchain transaction.
-- **Forced Backup**: Automatically prompts the user to secure their new keys post-migration.
-
-### 📊 Real-time Network Info
-A new dashboard to monitor the S256 network health directly within the wallet:
-- **Blockchain Stats**: Height, Difficulty, and Median Time.
-- **Mempool Metrics**: Pending transaction count and size.
-- **Mining Data**: Global network hashrate with automatic unit conversion (GH/s, TH/s).
-
-### 🛡️ Enhanced Security
-- **In-Memory Storage**: Sensitive keys now live only in the application's RAM.
-- **Refresh Protection**: Refreshing the browser (F5) now clears the session and logs the user out, preventing "partial state" mnemonic loss.
-- **Zero Leaks**: All debug prints and sensitive logs have been removed for production.
-- **CORS-Ready RPC**: Improved RPC communication that works seamlessly with secure proxies.
+- **Derivation:** BIP39 mnemonic seed and BIP44 paths.
+- **Cryptography:** PointyCastle + SHA256/RIPEMD160 primitives.
+- **Frontend:** Flutter Web.
+- **Transport:** JSON-RPC over HTTPS.
 
 ## Features
 
-- **Seed Phrase Wallet**: Modern 12/24 word recovery phrases (Recommended).
-- **Legacy WIF Wallet**: Support for existing raw Private Keys (WIF).
-- **Send/Receive**: Full transaction support with Bech32 (s21...) addresses and QR codes.
-- **Coin Control**: Advanced UTXO selection for privacy and fee optimization.
-- **Glassmorphism UI**: A sleek, dark-themed interface with neon purple and gold accents.
+- **Seed Phrase Wallet:** 12/24-word recovery phrase support.
+- **Legacy WIF Wallet:** compatibility with existing private keys.
+- **Send/Receive:** standard transfer support with multiple address formats.
+- **Coin Control:** manual UTXO selection for fee/privacy tuning.
+- **Network Visibility:** integrated network info and health metrics.
+- **Price Tracking:** in-app S256/USD price display.
 
 ## Security Warning
 
-⚠️ **Web wallets are intended for convenience, not long-term high-value storage.**
+Web wallets are designed for convenience, not long-term high-value storage.
 
-- Private keys exist ONLY in memory during your active session.
-- Closing the tab or refreshing the page logs you out instantly.
-- Always verify the URL is `https://sha256coin.eu`.
-- For large amounts, always use a desktop or hardware wallet.
+- Verify you are on the correct URL: `https://sha256coin.eu`.
+- Keep seed phrase/private keys offline and backed up securely.
+- Treat browser environments as potentially exposed.
+- Prefer hardware or offline signing workflows for larger holdings.
 
 ## Development
 
 Run locally:
+
 ```bash
 flutter run -d chrome
 ```
+
 or
+
 ```bash
 flutter run -d web-server --web-port 8080
 ```
 
-## Building for Deployment
+## Build for Deployment
 
-Build the web app:
 ```bash
 flutter build web --release --base-href "/web-wallet/"
 ```
 
 ## RPC Configuration
 
-The wallet uses an RPC proxy to communicate with S256 nodes. By default the project expects a secure proxy endpoint such as `https://sha256coin.eu/rpc` (or your own proxy).
+The wallet expects an RPC proxy endpoint, for example:
 
-The proxy must:
+- `https://sha256coin.eu/rpc`
+
+The proxy should:
 
 - Serve over HTTPS.
-- Return a single `Access-Control-Allow-Origin` header matching `https://sha256coin.eu/` (or the origin you host the wallet from).
-- Handle preflight `OPTIONS` requests and forward POST JSON-RPC payloads to an upstream node.
+- Return a single `Access-Control-Allow-Origin` header matching your wallet origin.
+- Handle preflight `OPTIONS` requests and forward POST JSON-RPC payloads upstream.
 
 ## License
 

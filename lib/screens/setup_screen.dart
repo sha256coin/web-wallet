@@ -159,7 +159,7 @@ import '../theme/app_theme.dart';
                   ],
                   const SizedBox(height: 40),
                   const Text(
-                    'S256 Web-Wallet version 2.5',
+                    'S256 Web-Wallet version 2.6.0 - 2026-08-02 - SHA256 Coin Core',
                     style: TextStyle(color: Colors.white54, fontSize: 14),
                     textAlign: TextAlign.center,
                   ),

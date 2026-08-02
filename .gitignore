@@ -53,3 +53,6 @@ dart_defines.json
 
 # Web build output (keep for GitHub Pages)
 # /build/web
+
+#debug directory
+debug/

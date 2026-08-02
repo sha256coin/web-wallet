@@ -342,6 +342,153 @@ class WalletService {
     return finalUtxos;
   }
 
+  double? _parsePositiveFeeRate(dynamic value) {
+    if (value is num) {
+      final parsed = value.toDouble();
+      return parsed > 0 ? parsed : null;
+    }
+    if (value is String) {
+      final parsed = double.tryParse(value);
+      if (parsed != null && parsed > 0) return parsed;
+    }
+    return null;
+  }
+
+  Future<double> _resolveNodeBaselineFee(
+    String rpcUrl,
+    String rpcUser,
+    String rpcPassword,
+  ) async {
+    const hardFloor = 0.00001;
+    double relayFee = hardFloor;
+    double incrementalFee = hardFloor;
+    double mempoolMinFee = hardFloor;
+
+    try {
+      final netInfo = await rpcRequest(
+        rpcUrl,
+        rpcUser,
+        rpcPassword,
+        'getnetworkinfo',
+      );
+      final relay = _parsePositiveFeeRate(netInfo?['result']?['relayfee']);
+      final incremental =
+          _parsePositiveFeeRate(netInfo?['result']?['incrementalfee']);
+      if (relay != null) relayFee = relay;
+      if (incremental != null) incrementalFee = incremental;
+    } catch (_) {}
+
+    try {
+      final mempoolInfo = await rpcRequest(
+        rpcUrl,
+        rpcUser,
+        rpcPassword,
+        'getmempoolinfo',
+      );
+      final mempoolMin =
+          _parsePositiveFeeRate(mempoolInfo?['result']?['mempoolminfee']);
+      if (mempoolMin != null) mempoolMinFee = mempoolMin;
+    } catch (_) {}
+
+    return max(hardFloor, max(relayFee, max(incrementalFee, mempoolMinFee)));
+  }
+
+  Future<Map<String, dynamic>> resolveFeeRate(
+    String rpcUrl,
+    String rpcUser,
+    String rpcPassword, {
+    double? manualFeeRateCoinPerKb,
+  }) async {
+    if (manualFeeRateCoinPerKb != null) {
+      if (manualFeeRateCoinPerKb <= 0) {
+        return {
+          'success': false,
+          'message': 'Manual fee rate must be greater than zero.',
+          'reason': 'invalid-manual-fee',
+        };
+      }
+      return {
+        'success': true,
+        'feeRate': manualFeeRateCoinPerKb,
+        'source': 'manual',
+      };
+    }
+
+    try {
+      final baselineFeeRate = await _resolveNodeBaselineFee(
+        rpcUrl,
+        rpcUser,
+        rpcPassword,
+      );
+      final response = await rpcRequest(
+        rpcUrl,
+        rpcUser,
+        rpcPassword,
+        'estimatesmartfee',
+        [6],
+      );
+
+      if (response?['error'] != null) {
+        return {
+          'success': true,
+          'feeRate': baselineFeeRate,
+          'baselineFeeRate': baselineFeeRate,
+          'source': 'baseline',
+          'message': 'Smart fee unavailable. Using node baseline fee.',
+        };
+      }
+
+      final double? feeRate =
+          _parsePositiveFeeRate(response?['result']?['feerate']);
+
+      if (feeRate == null || feeRate <= 0) {
+        return {
+          'success': true,
+          'feeRate': baselineFeeRate,
+          'baselineFeeRate': baselineFeeRate,
+          'source': 'baseline',
+          'message':
+              'Estimator returned no usable value. Using node baseline fee.',
+        };
+      }
+
+      final sanityCeiling = baselineFeeRate * 50;
+      if (feeRate > sanityCeiling) {
+        return {
+          'success': true,
+          'feeRate': baselineFeeRate,
+          'baselineFeeRate': baselineFeeRate,
+          'estimatedFeeRate': feeRate,
+          'sanityCeiling': sanityCeiling,
+          'source': 'clamped',
+          'message':
+              'Estimator outlier (${feeRate.toStringAsFixed(8)} S256/kvB). '
+                  'Using baseline ${baselineFeeRate.toStringAsFixed(8)} S256/kvB.',
+        };
+      }
+
+      return {
+        'success': true,
+        'feeRate': feeRate,
+        'baselineFeeRate': baselineFeeRate,
+        'source': 'estimated',
+      };
+    } catch (_) {
+      final baselineFeeRate = await _resolveNodeBaselineFee(
+        rpcUrl,
+        rpcUser,
+        rpcPassword,
+      );
+      return {
+        'success': true,
+        'feeRate': baselineFeeRate,
+        'baselineFeeRate': baselineFeeRate,
+        'source': 'baseline',
+        'message': 'Fee estimation request failed. Using node baseline fee.',
+      };
+    }
+  }
+
   // Send transaction
   Future<Map<String, dynamic>> sendTransaction(
     String rpcUrl,
@@ -351,8 +498,16 @@ class WalletService {
     String fromAddress,
     String toAddress,
     double amount, {
+    double? manualFeeRateCoinPerKb,
     List<Map<String, dynamic>>? preSelectedUtxos,
   }) async {
+    int toSats(num coins) => (coins.toDouble() * 1e8).round();
+    double toCoins(int sats) => sats / 1e8;
+    int estimateFeeSats(double feeRateCoinPerKb, int vbytes) {
+      final feeCoins = feeRateCoinPerKb * vbytes / 1000;
+      return toSats(feeCoins);
+    }
+
     // ── 1. Get UTXOs ────────────────────────────────────────────────────────
     final allUtxos = await getUtxos(rpcUrl, rpcUser, rpcPassword, fromAddress);
     final utxos = (preSelectedUtxos != null && preSelectedUtxos.isNotEmpty)
@@ -373,6 +528,7 @@ class WalletService {
             : 'No confirmed funds available. Please wait approximately 20 minutes for your deposit to confirm.',
       };
     }
+
     // ── 2. Ensure every UTXO has a scriptPubKey UP FRONT ────────────────────
     for (final utxo in utxos) {
       if (utxo['scriptPubKey'] == null || (utxo['scriptPubKey'] as String).isEmpty) {
@@ -402,30 +558,44 @@ class WalletService {
       }
     }
 
-    final totalAvailable = utxos.fold(
-        0.0, (sum, u) => sum + (u['amount'] as num).toDouble());
-    final bool isSweep = amount >= totalAvailable - 0.00001;
+    final totalAvailableSats = utxos.fold<int>(
+      0,
+      (sum, u) => sum + toSats((u['amount'] as num).toDouble()),
+    );
+    final requestedAmountSats = toSats(amount);
+    final bool isSweep = requestedAmountSats >= totalAvailableSats - 1000;
 
     // Sort largest-first for efficient UTXO selection
     utxos.sort((a, b) => ((b['amount'] as num).toDouble())
         .compareTo((a['amount'] as num).toDouble()));
 
-    // ── 3. Fetch fee rate ───────────────────────────────────────────────────
-    double feeRate = 0.00001; // sat/vByte fallback
-    try {
-      final r = await rpcRequest(
-          rpcUrl, rpcUser, rpcPassword, 'estimatesmartfee', [6]);
-      if (r?['result']?['feerate'] != null) {
-        feeRate = (r!['result']['feerate'] as num).toDouble();
-      }
-    } catch (_) {}
+    // ── 3. Resolve fee rate (estimated or manual) ───────────────────────────
+    final feeResolution = await resolveFeeRate(
+      rpcUrl,
+      rpcUser,
+      rpcPassword,
+      manualFeeRateCoinPerKb: manualFeeRateCoinPerKb,
+    );
+
+    if (feeResolution['success'] != true) {
+      return {
+        'success': false,
+        'requiresManualFee': manualFeeRateCoinPerKb == null,
+        'feeEstimationFailed': true,
+        'message': feeResolution['message'] as String? ??
+            'Unable to establish transaction fee.',
+      };
+    }
+
+    final double feeRate = (feeResolution['feeRate'] as num).toDouble();
+    final bool feeEstablished = feeRate > 0;
 
     // ── 4. UTXO selection + sizing loop ─────────────────────────────────────
     final selectedUtxos = <Map<String, dynamic>>[];
-    double inputSum = 0.0;
+    int inputSumSats = 0;
     for (int i = 0; i < utxos.length; i++) {
       selectedUtxos.add(utxos[i]);
-      inputSum += (utxos[i]['amount'] as num).toDouble();
+      inputSumSats += toSats((utxos[i]['amount'] as num).toDouble());
 
       if (isSweep && i < utxos.length - 1) continue; 
 
@@ -446,35 +616,56 @@ class WalletService {
         txSize += destOutputSize + changeOutputSize;
       }
 
-      final actualFee = double.parse((feeRate * txSize / 1000).toStringAsFixed(8));
-      final needed = isSweep ? actualFee : amount + actualFee;
-      if (inputSum < needed) continue; // Loop until input matches costs
+      final actualFeeSats = estimateFeeSats(feeRate, txSize);
+      final neededSats = isSweep
+          ? actualFeeSats
+          : requestedAmountSats + actualFeeSats;
+      if (inputSumSats < neededSats) continue;
 
       // ── Build S256TxInput list ─────────────────────────────────────────
-      final inputs = selectedUtxos.map((u) {
+      final inputs = <S256TxInput>[];
+      for (final u in selectedUtxos) {
         String? scriptHex = u['scriptPubKey'] as String?;
-      // Safety Checkpoint: If null or empty, compute it directly from the source address
+        // Safety checkpoint: if missing, compute from source address.
         if (scriptHex == null || scriptHex.isEmpty) {
-          try {
-            final computedScript = S256Signer.scriptFromAddress(fromAddress);
-            scriptHex = HEX.encode(computedScript);
-          } catch (e) {
-            scriptHex = ''; 
-          }
+          final computedScript = S256Signer.scriptFromAddress(fromAddress);
+          scriptHex = HEX.encode(computedScript);
         }
-        return S256TxInput(
-          txid: u['txid'] as String,
-          vout: u['vout'] as int,
-          scriptPubKey: Uint8List.fromList(HEX.decode(scriptHex)),
-          satoshis: ((u['amount'] as num).toDouble() * 1e8).round(),
+
+        Uint8List scriptBytes;
+        try {
+          scriptBytes = Uint8List.fromList(HEX.decode(scriptHex));
+        } catch (_) {
+          return {
+            'success': false,
+            'message':
+                'Invalid scriptPubKey for input ${u['txid']}:${u['vout']}.',
+          };
+        }
+
+        if (scriptBytes.isEmpty) {
+          return {
+            'success': false,
+            'message':
+                'Empty scriptPubKey for input ${u['txid']}:${u['vout']}.',
+          };
+        }
+
+        inputs.add(
+          S256TxInput(
+            txid: u['txid'] as String,
+            vout: u['vout'] as int,
+            scriptPubKey: scriptBytes,
+            satoshis: toSats((u['amount'] as num).toDouble()),
+          ),
         );
-      }).toList();
+      }
 
       // ── Build S256TxOutput list ────────────────────────────────────────
       final outputs = <S256TxOutput>[];
       try {
         if (isSweep) {
-          final sweepSats = ((inputSum - actualFee) * 1e8).round();
+          final sweepSats = inputSumSats - actualFeeSats;
           if (sweepSats <= 546) {
             return {'success': false, 'message': 'Balance too low to cover fees.'};
           }
@@ -485,9 +676,9 @@ class WalletService {
         } else {
           outputs.add(S256TxOutput(
             scriptPubKey: S256Signer.scriptFromAddress(toAddress),
-            satoshis: (amount * 1e8).round(),
+            satoshis: requestedAmountSats,
           ));
-          final changeSats = ((inputSum - amount - actualFee) * 1e8).round();
+          final changeSats = inputSumSats - requestedAmountSats - actualFeeSats;
           if (changeSats > 546) {
             outputs.add(S256TxOutput(
               scriptPubKey: S256Signer.scriptFromAddress(fromAddress),
@@ -522,12 +713,13 @@ class WalletService {
         return {
           'success': true,
           'txid': sendResult!['result'],
-          'fee': actualFee,
+          'fee': toCoins(actualFeeSats),
         };
       }
 
       final errMsg = sendResult?['error']?['message'] as String? ?? 'Unknown error';
-      if (errMsg.contains('insufficient fee') || errMsg.contains('rejecting replacement')) {
+      if (feeEstablished &&
+          (errMsg.contains('insufficient fee') || errMsg.contains('rejecting replacement'))) {
         return {
           'success': false,
           'message': 'You have a pending transaction. Please wait approximately 20 minutes before sending another.',
@@ -538,7 +730,7 @@ class WalletService {
 
     return {
       'success': false,
-      'message': 'Insufficient funds. Available: ${inputSum.toStringAsFixed(8)} S256.',
+      'message': 'Insufficient funds. Available: ${toCoins(inputSumSats).toStringAsFixed(8)} S256.',
     };
   }
   
