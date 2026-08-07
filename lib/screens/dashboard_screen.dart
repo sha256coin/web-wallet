@@ -95,6 +95,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
   PriceData? _priceData;
   bool _priceLoading = true;
   bool _advancedSend = false;
+  bool _subtractFeeFromAmount = false;
   final PriceService _priceService = PriceService();
   bool? _addressValid;       // null = unchecked, true = valid, false = invalid
   bool _isValidatingAddress = false;
@@ -1368,6 +1369,9 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
               ),
               const SizedBox(height: 20),
 
+              _buildSubtractFeeTicker(provider, feeSnapshot),
+              const SizedBox(height: 12),
+
               // Amount field
               TextField(
                 controller: _amountController,
@@ -1417,8 +1421,18 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                     ? null
                     : () async {
                         provider.clearMessage();
-                        final amount = double.tryParse(_amountController.text);
-                        if (amount != null) {
+                        final enteredAmount = double.tryParse(_amountController.text.trim());
+                        if (enteredAmount != null) {
+                          final liveFeeSnapshot = _currentDisplayedFee(provider);
+                          final amount = _effectiveSendAmount(
+                            provider: provider,
+                            feeSnapshot: liveFeeSnapshot,
+                            enteredAmount: enteredAmount,
+                          );
+                          if (amount <= 0) {
+                            return;
+                          }
+
                           double? feeRateCoinPerKvB;
                           if (provider.feeRateReady) {
                             feeRateCoinPerKvB = provider.feeRate;
@@ -1470,10 +1484,12 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                             context: context,
                             provider: provider,
                             toAddress: _toController.text.trim(),
+                            enteredAmount: enteredAmount,
                             amount: amount,
                             estimatedFee: confirmFeeSnapshot.fee,
                             hasSelectedInputs:
                                 confirmFeeSnapshot.hasExactCoinControlFee,
+                            subtractFeeFromAmount: _subtractFeeFromAmount,
                           );
                           if (!preConfirm) return;
 
@@ -1571,17 +1587,63 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
   String? _amountError(WalletProvider provider) {
     final text = _amountController.text.trim();
     if (text.isEmpty) return null;
-    final value = double.tryParse(text);
-    if (value == null) return 'Invalid number';
-    if (value <= 0) return 'Amount must be greater than zero';
-    if (value < 0.00000546) return 'Amount below dust threshold (0.00000546 S256)';
-    if (_advancedSend && provider.selectedUtxoCount > 0 && value > provider.selectedUtxoTotal) {
+    final enteredAmount = double.tryParse(text);
+    if (enteredAmount == null) return 'Invalid number';
+    if (enteredAmount <= 0) return 'Amount must be greater than zero';
+
+    final feeSnapshot = _currentDisplayedFee(provider);
+    if (_subtractFeeFromAmount && feeSnapshot.fee <= 0) {
+      return 'Fee estimate required for subtract-fee mode';
+    }
+
+    final effectiveSendAmount = _effectiveSendAmount(
+      provider: provider,
+      feeSnapshot: feeSnapshot,
+      enteredAmount: enteredAmount,
+    );
+
+    if (_subtractFeeFromAmount && effectiveSendAmount <= 0) {
+      return 'Amount must be greater than estimated fee';
+    }
+    if (effectiveSendAmount < 0.00000546) {
+      return _subtractFeeFromAmount
+          ? 'Recipient amount after fee is below dust threshold (0.00000546 S256)'
+          : 'Amount below dust threshold (0.00000546 S256)';
+    }
+
+    if (_advancedSend &&
+        provider.selectedUtxoCount > 0 &&
+        enteredAmount > provider.selectedUtxoTotal) {
       return 'Exceeds selected inputs (${provider.selectedUtxoTotal.toStringAsFixed(8)} S256)';
     }
-    if (!_advancedSend && value > (provider.wallet?.balance ?? 0)) {
+    if (!_advancedSend && enteredAmount > (provider.wallet?.balance ?? 0)) {
       return 'Exceeds available balance';
     }
     return null;
+  }
+
+  double _effectiveSendAmount({
+    required WalletProvider provider,
+    required ({double fee, bool hasExactCoinControlFee, ({double fee, int? inputCount, bool amountAware}) simpleEstimate})
+        feeSnapshot,
+    required double enteredAmount,
+  }) {
+    final value = _subtractFeeFromAmount ? (enteredAmount - feeSnapshot.fee) : enteredAmount;
+    if (value <= 0) return 0.0;
+    return double.parse(value.toStringAsFixed(8));
+  }
+
+  double _estimatedTotalSpendAmount({
+    required WalletProvider provider,
+    required ({double fee, bool hasExactCoinControlFee, ({double fee, int? inputCount, bool amountAware}) simpleEstimate})
+        feeSnapshot,
+    required double enteredAmount,
+  }) {
+    if (_subtractFeeFromAmount) {
+      return double.parse(enteredAmount.toStringAsFixed(8));
+    }
+    final total = enteredAmount + feeSnapshot.fee;
+    return double.parse(total.toStringAsFixed(8));
   }
 
   void _syncAmountToSelection(WalletProvider provider) {
@@ -1952,6 +2014,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
     _amountController.clear();
     setState(() {
       _addressValid = null;
+      _subtractFeeFromAmount = false;
       if (_advancedSend) _advancedSend = false;
     });
     provider.resetCoinControl();
@@ -1961,11 +2024,19 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
     required BuildContext context,
     required WalletProvider provider,
     required String toAddress,
+    required double enteredAmount,
     required double amount,
     required double estimatedFee,
     required bool hasSelectedInputs,
+    required bool subtractFeeFromAmount,
   }) async {
     final feeSource = _feeSourceLabel(provider);
+    final amountModeLabel = subtractFeeFromAmount
+        ? 'Fee included in entered amount'
+        : 'Fee added on top of entered amount';
+    final totalSpend = subtractFeeFromAmount
+        ? enteredAmount
+        : enteredAmount + estimatedFee;
 
     final confirmed = await showDialog<bool>(
       context: context,
@@ -1998,7 +2069,38 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text('Amount',
+                  const Text('Amount Mode',
+                      style: TextStyle(color: Colors.white60, fontSize: 12)),
+                  Text(
+                    amountModeLabel,
+                    style: TextStyle(
+                      color: subtractFeeFromAmount
+                          ? Colors.amberAccent
+                          : Colors.greenAccent,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text('Entered Amount',
+                      style: TextStyle(color: Colors.white60, fontSize: 12)),
+                  Text(
+                    '${enteredAmount.toStringAsFixed(8)} S256',
+                    style: const TextStyle(
+                        color: Colors.white, fontWeight: FontWeight.w600),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text('Recipient Amount',
                       style: TextStyle(color: Colors.white60, fontSize: 12)),
                   Text(
                     '${amount.toStringAsFixed(8)} S256',
@@ -2017,6 +2119,19 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                     '${estimatedFee.toStringAsFixed(8)} S256',
                     style: const TextStyle(
                         color: Colors.cyanAccent, fontWeight: FontWeight.w600),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text('Total Spend (est.)',
+                      style: TextStyle(color: Colors.white60, fontSize: 12)),
+                  Text(
+                    '${totalSpend.toStringAsFixed(8)} S256',
+                    style: const TextStyle(
+                        color: Colors.white, fontWeight: FontWeight.w600),
                   ),
                 ],
               ),
@@ -2794,10 +2909,41 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
     ({double fee, bool hasExactCoinControlFee, ({double fee, int? inputCount, bool amountAware}) simpleEstimate})
         feeSnapshot,
   ) {
-    final hasSelectedInputs = feeSnapshot.hasExactCoinControlFee;
+    final hasExactCoinControlFee = feeSnapshot.hasExactCoinControlFee;
     final simpleEstimate = feeSnapshot.simpleEstimate;
     final fee = feeSnapshot.fee;
-    final label = hasSelectedInputs ? 'Est. fee' : 'Estimated Network Fee';
+    final detailsLabel = hasExactCoinControlFee
+      ? 'Size-aware estimate for ${provider.selectedUtxoCount} selected input(s)'
+      : _advancedSend
+        ? 'Typical fee fallback until inputs are selected'
+        : simpleEstimate.amountAware
+          ? 'Amount-aware estimate using ~${simpleEstimate.inputCount ?? 1} input(s)'
+          : 'Simple mode estimate using ~${simpleEstimate.inputCount ?? 2} input(s)';
+    final detailsColor = hasExactCoinControlFee
+      ? Colors.greenAccent
+      : _advancedSend
+        ? Colors.amberAccent
+        : simpleEstimate.amountAware
+          ? Colors.white70
+          : Colors.white54;
+
+    if (fee <= 0) return const SizedBox.shrink();
+
+    final sourceText = _feeSourceLabel(provider);
+    final sourceColor = _feeSourceColor(provider);
+    final rateColor = sourceColor.withValues(alpha: 0.85);
+    final rateText =
+      '${provider.feeRate.toStringAsFixed(8)} S256/kvB (${_formatSatVb(provider.feeRate)} sat/vB)';
+    final enteredAmount = double.tryParse(_amountController.text.trim());
+    final displayNetAfterFee = (hasExactCoinControlFee && enteredAmount != null && enteredAmount > 0)
+      ? _effectiveSendAmount(
+        provider: provider,
+        feeSnapshot: feeSnapshot,
+        enteredAmount: enteredAmount,
+        )
+      : provider.estimatedNetSend;
+    final netRowLabel = _subtractFeeFromAmount ? 'Recipient After Fee' : 'Max Send After Fee';
+    final netAfterFeeText = displayNetAfterFee > 0 ? '${displayNetAfterFee.toStringAsFixed(8)} S256' : '-';
 
     if (provider.isFetchingFeeRate) {
       return const Padding(
@@ -2809,66 +2955,88 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
       );
     }
 
-    if (fee <= 0) return const SizedBox.shrink();
-
-    final feeRate = provider.feeRate;
-    final feeRateSatVb = _formatSatVb(feeRate);
-    final feeSource = _feeSourceLabel(provider);
-    final detailsLabel = hasSelectedInputs
-        ? 'Size-aware estimate for ${provider.selectedUtxoCount} selected input(s)'
-        : simpleEstimate.amountAware
-            ? 'Amount-aware estimate using ~${simpleEstimate.inputCount ?? 1} input(s)'
-            : 'Simple mode estimate using ~${simpleEstimate.inputCount ?? 2} input(s)';
-
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.05),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+        border: Border.all(color: Colors.white10),
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(label, style: const TextStyle(fontSize: 11, color: Colors.grey)),
-              Text(
-                '$feeSource source',
-                style: const TextStyle(fontSize: 11, color: Colors.grey),
-              ),
-            ],
+          const Text(
+            'Estimated Network Fee',
+            style: TextStyle(color: Colors.white70, fontSize: 11),
           ),
           const SizedBox(height: 2),
+          Text(
+            '${fee.toStringAsFixed(8)} S256',
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 8),
+          const Divider(height: 1, color: Colors.white12),
+          const SizedBox(height: 8),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                '${fee.toStringAsFixed(8)} S256',
-                style: const TextStyle(fontSize: 13),
+              const Text(
+                'Fee Source',
+                style: TextStyle(color: Colors.white54, fontSize: 12),
               ),
-              if (hasSelectedInputs)
-                Text(
-                  provider.estimatedNetSend > 0
-                      ? 'Net ${provider.estimatedNetSend.toStringAsFixed(8)} S256'
-                      : 'Net -',
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: provider.estimatedNetSend > 0 ? Colors.white : Colors.red,
-                  ),
+              Text(
+                sourceText,
+                style: TextStyle(
+                  color: sourceColor,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
                 ),
+              ),
             ],
           ),
-          const SizedBox(height: 6),
-          Text(
-            'Rate: ${feeRate.toStringAsFixed(8)} S256/kvB ($feeRateSatVb sat/vB)',
-            style: const TextStyle(fontSize: 11, color: Colors.grey),
+          const SizedBox(height: 4),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'Fee Rate',
+                style: TextStyle(color: Colors.white54, fontSize: 12),
+              ),
+              Expanded(
+                child: Text(
+                  rateText,
+                  textAlign: TextAlign.right,
+                  style: TextStyle(color: rateColor, fontSize: 12),
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: 6),
+          if (hasExactCoinControlFee) ...[
+            const SizedBox(height: 4),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  netRowLabel,
+                  style: TextStyle(color: Colors.white54, fontSize: 12),
+                ),
+                Text(
+                  netAfterFeeText,
+                  style: const TextStyle(color: Colors.greenAccent, fontSize: 12),
+                ),
+              ],
+            ),
+          ],
+          const SizedBox(height: 8),
+          const Divider(height: 1, color: Colors.white12),
+          const SizedBox(height: 8),
           Text(
             detailsLabel,
-            style: const TextStyle(fontSize: 11, color: Colors.grey),
+            style: TextStyle(color: detailsColor, fontSize: 11),
           ),
         ],
       ),
@@ -2880,20 +3048,31 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
     ({double fee, bool hasExactCoinControlFee, ({double fee, int? inputCount, bool amountAware}) simpleEstimate})
         feeSnapshot,
   ) {
-    final amount = double.tryParse(_amountController.text.trim()) ?? 0.0;
-    if (amount <= 0) return const SizedBox.shrink();
+    final enteredAmount = double.tryParse(_amountController.text.trim()) ?? 0.0;
+    if (enteredAmount <= 0) return const SizedBox.shrink();
 
     final hasSelectedInputs = feeSnapshot.hasExactCoinControlFee;
     final fee = feeSnapshot.fee;
+    final sendAmount = _effectiveSendAmount(
+      provider: provider,
+      feeSnapshot: feeSnapshot,
+      enteredAmount: enteredAmount,
+    );
+    final totalSpend = _estimatedTotalSpendAmount(
+      provider: provider,
+      feeSnapshot: feeSnapshot,
+      enteredAmount: enteredAmount,
+    );
+    if (sendAmount <= 0) return const SizedBox.shrink();
 
     final selectedInputsSats =
         hasSelectedInputs ? _s256ToSats(provider.selectedUtxoTotal) : 0;
     final autoSpendableSats = _s256ToSats(provider.wallet?.balance ?? 0.0);
-    final amountSats = _s256ToSats(amount);
-    final feeSats = _s256ToSats(fee);
+    final sendAmountSats = _s256ToSats(sendAmount);
+    final totalSpendSats = _s256ToSats(totalSpend);
     final expectedChangeSats = hasSelectedInputs
-        ? (selectedInputsSats - amountSats - feeSats)
-        : (autoSpendableSats - amountSats - feeSats);
+        ? (selectedInputsSats - totalSpendSats)
+        : (autoSpendableSats - totalSpendSats);
 
     return Container(
       padding: const EdgeInsets.all(12),
@@ -2927,14 +3106,28 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text('Send Amount',
+              const Text('Recipient Amount',
                   style: TextStyle(color: Colors.white60, fontSize: 12)),
               Text(
-                '${_satsToS256(amountSats).toStringAsFixed(8)} S256',
+                '${_satsToS256(sendAmountSats).toStringAsFixed(8)} S256',
                 style: const TextStyle(color: Colors.white, fontSize: 12),
               ),
             ],
           ),
+          if (_subtractFeeFromAmount) ...[
+            const SizedBox(height: 4),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text('Entered Total (includes fee)',
+                    style: TextStyle(color: Colors.white60, fontSize: 12)),
+                Text(
+                  '${enteredAmount.toStringAsFixed(8)} S256',
+                  style: const TextStyle(color: Colors.white, fontSize: 12),
+                ),
+              ],
+            ),
+          ],
           const SizedBox(height: 4),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -2943,6 +3136,18 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                   style: TextStyle(color: Colors.white60, fontSize: 12)),
               Text(
                 '${fee.toStringAsFixed(8)} S256',
+                style: const TextStyle(color: Colors.white, fontSize: 12),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text('Total Spend (est.)',
+                  style: TextStyle(color: Colors.white60, fontSize: 12)),
+              Text(
+                '${_satsToS256(totalSpendSats).toStringAsFixed(8)} S256',
                 style: const TextStyle(color: Colors.white, fontSize: 12),
               ),
             ],
@@ -2983,6 +3188,66 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
               ),
             ],
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSubtractFeeTicker(
+    WalletProvider provider,
+    ({double fee, bool hasExactCoinControlFee, ({double fee, int? inputCount, bool amountAware}) simpleEstimate})
+        feeSnapshot,
+  ) {
+    final enteredAmount = double.tryParse(_amountController.text.trim()) ?? 0.0;
+    final effectiveAmount = enteredAmount > 0
+        ? _effectiveSendAmount(
+            provider: provider,
+            feeSnapshot: feeSnapshot,
+            enteredAmount: enteredAmount,
+          )
+        : 0.0;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.04),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.white12),
+      ),
+      child: Row(
+        children: [
+          const Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Subtract Fee From Amount',
+                  style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600),
+                ),
+                SizedBox(height: 2),
+                Text(
+                  'ON: entered amount is total spend cap. OFF: recipient gets full entered amount.',
+                  style: TextStyle(color: Colors.white54, fontSize: 11),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          Switch(
+            value: _subtractFeeFromAmount,
+            onChanged: (value) => setState(() => _subtractFeeFromAmount = value),
+          ),
+          if (_subtractFeeFromAmount && enteredAmount > 0) ...[
+            const SizedBox(width: 8),
+            Text(
+              'Net ${effectiveAmount > 0 ? effectiveAmount.toStringAsFixed(8) : '-'}',
+              style: TextStyle(
+                color: effectiveAmount > 0 ? Colors.greenAccent : Colors.redAccent,
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
         ],
       ),
     );
