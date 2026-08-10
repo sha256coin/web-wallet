@@ -120,7 +120,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                         const SizedBox(height: 10),
                         const Padding(
                                 padding: EdgeInsets.symmetric(horizontal: 16),
-                                child: Text('S256 Web-Wallet version 2.6.0 - 2026-08-02 - SHA256 Coin Core', 
+                                child: Text('S256 Web-Wallet version 2.6 - Powered by SHA256 Coin Core', 
                                 style: TextStyle(color: Colors.white54, fontSize: 12),
                                 textAlign: TextAlign.center
                           ),      
