@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -91,6 +92,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
   late TabController _tabController;
   final TextEditingController _toController = TextEditingController();
   final TextEditingController _amountController = TextEditingController();
+  final TextEditingController _messageController = TextEditingController();
   late Timer _priceUpdateTimer;
   PriceData? _priceData;
   bool _priceLoading = true;
@@ -132,6 +134,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
     _tabController.dispose();
     _toController.dispose();
     _amountController.dispose();
+    _messageController.dispose();
     _addressDebounce?.cancel();
     super.dispose();
   }
@@ -1303,6 +1306,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
 
   Widget _buildSendTab(WalletProvider provider) {
     final amountErr = _amountError(provider);
+    final messageErr = _messageError();
     final feeSnapshot = _currentDisplayedFee(provider);
 
     return SingleChildScrollView(
@@ -1417,6 +1421,9 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
               const SizedBox(height: 8),
               _buildFeeSourceSelector(provider),
 
+              const SizedBox(height: 20),
+              _buildMessageBox(),
+
               if (_advancedSend) ...[
                 const SizedBox(height: 32),
                 _buildUtxoSelector(provider),
@@ -1426,15 +1433,19 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
               const SizedBox(height: 40),
 
               ElevatedButton(
-                onPressed: provider.isLoading 
-                    || amountErr != null 
+                onPressed: provider.isLoading
+                    || amountErr != null
+                    || messageErr != null
                     || _isValidatingAddress
-                    || _toController.text.trim().isEmpty    
+                    || _toController.text.trim().isEmpty
                     || _addressValid == false
                     ? null
                     : () async {
                         provider.clearMessage();
                         final enteredAmount = double.tryParse(_amountController.text.trim());
+                        final customMessage = _messageController.text.trim().isEmpty
+                            ? null
+                            : _messageController.text.trim();
                         if (enteredAmount != null) {
                           final liveFeeSnapshot = _currentDisplayedFee(provider);
                           final amount = _effectiveSendAmount(
@@ -1503,6 +1514,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                             hasSelectedInputs:
                                 confirmFeeSnapshot.hasExactCoinControlFee,
                             subtractFeeFromAmount: _subtractFeeFromAmount,
+                            message: customMessage,
                           );
                           if (!preConfirm) return;
 
@@ -1511,6 +1523,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                             amount,
                             manualFeeRateCoinPerKb: feeRateCoinPerKvB,
                             preferBatchSend: preferBatchSend,
+                            message: customMessage,
                           );
 
                           if (result['success'] != true &&
@@ -1524,6 +1537,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                                 amount,
                                 manualFeeRateCoinPerKb: manualFeeRate,
                                 preferBatchSend: preferBatchSend,
+                                message: customMessage,
                               );
                               if (retryResult['success'] == true) {
                                 _resetSendForm(provider);
@@ -1555,6 +1569,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                                   amount,
                                   manualFeeRateCoinPerKb: feeRateCoinPerKvB,
                                   preferBatchSend: true,
+                                  message: customMessage,
                                 );
                                 if (retryResult['success'] == true) {
                                   _resetSendForm(provider);
@@ -1595,6 +1610,113 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
         ),
       ),
     );
+  }
+
+  Widget _buildMessageBox() {
+    final byteLen = utf8.encode(_messageController.text).length;
+    final over = byteLen > 80;
+    final counterColor = over
+        ? Colors.redAccent
+        : byteLen > 60
+            ? Colors.amberAccent
+            : Colors.cyanAccent;
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Colors.cyanAccent.withValues(alpha: 0.08),
+            Colors.cyanAccent.withValues(alpha: 0.02),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.cyanAccent.withValues(alpha: 0.25)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.chat_bubble_outline_rounded, color: Colors.cyanAccent, size: 16),
+              const SizedBox(width: 6),
+              const Text(
+                'On-Chain Message',
+                style: TextStyle(color: Colors.cyanAccent, fontSize: 12, fontWeight: FontWeight.w700, letterSpacing: 0.3),
+              ),
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: const Text('OPTIONAL', style: TextStyle(color: Colors.white54, fontSize: 9, fontWeight: FontWeight.w600, letterSpacing: 0.5)),
+              ),
+              const Spacer(),
+              Text(
+                '$byteLen/80',
+                style: TextStyle(color: counterColor, fontSize: 11, fontWeight: FontWeight.w600),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          TextField(
+            controller: _messageController,
+            maxLines: 2,
+            onChanged: (_) => setState(() {}),
+            style: const TextStyle(fontSize: 14),
+            decoration: InputDecoration(
+              isDense: true,
+              hintText: 'Say something on the blockchain forever…',
+              filled: true,
+              fillColor: Colors.black.withValues(alpha: 0.22),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: BorderSide.none,
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: BorderSide.none,
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: const BorderSide(color: Colors.cyanAccent, width: 1.5),
+              ),
+              errorBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: const BorderSide(color: Colors.redAccent, width: 1.2),
+              ),
+              errorText: _messageError(),
+              errorStyle: const TextStyle(fontSize: 11),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(Icons.info_outline_rounded, size: 12, color: Colors.white.withValues(alpha: 0.35)),
+              const SizedBox(width: 4),
+              Expanded(
+                child: Text(
+                  'Embedded via OP_RETURN — permanent and visible to anyone. Please keep it civil.',
+                  style: TextStyle(fontSize: 10.5, color: Colors.white.withValues(alpha: 0.4), fontStyle: FontStyle.italic),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  String? _messageError() {
+    final byteLength = utf8.encode(_messageController.text).length;
+    if (byteLength > 80) return 'Message too long ($byteLength/80 bytes)';
+    return null;
   }
 
   String? _amountError(WalletProvider provider) {
@@ -1682,7 +1804,10 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
     final enteredAmount = double.tryParse(_amountController.text.trim());
     final hasAmount = enteredAmount != null && enteredAmount > 0;
 
-    int txSizeForInputs(int inputs) => 10 + (inputs * 148) + (2 * 34);
+    final messageByteLength = utf8.encode(_messageController.text.trim()).length;
+    final opReturnOutputSize =
+        messageByteLength == 0 ? 0 : 9 + messageByteLength + (messageByteLength > 75 ? 1 : 0);
+    int txSizeForInputs(int inputs) => 10 + (inputs * 148) + (2 * 34) + opReturnOutputSize;
     double feeForInputs(int inputs) =>
         double.parse((feeRate * txSizeForInputs(inputs) / 1000).toStringAsFixed(8));
 
@@ -2025,6 +2150,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
   void _resetSendForm(WalletProvider provider) {
     _toController.clear();
     _amountController.clear();
+    _messageController.clear();
     setState(() {
       _addressValid = null;
       _subtractFeeFromAmount = false;
@@ -2042,6 +2168,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
     required double estimatedFee,
     required bool hasSelectedInputs,
     required bool subtractFeeFromAmount,
+    String? message,
   }) async {
     final feeSource = _feeSourceLabel(provider);
     final amountModeLabel = subtractFeeFromAmount
@@ -2171,6 +2298,29 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                 Text(
                   'Selected inputs: ${provider.selectedUtxoCount}',
                   style: const TextStyle(color: Colors.white70),
+                ),
+              ],
+              if (message != null && message.isNotEmpty) ...[
+                const SizedBox(height: 10),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Colors.amberAccent.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.amberAccent.withValues(alpha: 0.4)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Message (permanent & public on-chain)',
+                        style: TextStyle(color: Colors.amberAccent, fontSize: 11, fontWeight: FontWeight.w600),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(message, style: const TextStyle(color: Colors.white, fontSize: 13)),
+                    ],
+                  ),
                 ),
               ],
             ],
@@ -3410,7 +3560,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
         const SizedBox(height: 10),
         const Padding(
               padding: EdgeInsets.symmetric(horizontal: 16),
-              child: Text('S256 Web-Wallet version 2.6 - Powered by SHA256 Coin Core', 
+              child: Text('S256 Web-Wallet version 2.7 - Powered by SHA256 Coin Core', 
               style: TextStyle(color: Colors.white54, fontSize: 12),
               textAlign: TextAlign.center
         ),      

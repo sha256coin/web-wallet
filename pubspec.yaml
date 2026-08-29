@@ -1,7 +1,7 @@
 name: s256_web_wallet
 description: Simple S256 coin web wallet - Load, Send, Receive
 publish_to: "none"
-version: 2.6.0
+version: 2.7.0
 
 environment:
   sdk: ^3.5.1

@@ -1,6 +1,6 @@
 # S256 Coin Web-Wallet
 
-![Version](https://img.shields.io/badge/release-v2.6-1f6feb)
+![Version](https://img.shields.io/badge/release-v2.7-1f6feb)
 
 A modern, secure, non-custodial web wallet for the SHA256 Coin network. Private keys remain client-side and transactions are signed locally in the browser.
 
@@ -20,14 +20,15 @@ A modern, secure, non-custodial web wallet for the SHA256 Coin network. Private 
 
 ## Current Version
 
-- **Release:** `v2.6`
-- **Package Version:** `2.6.0` (see `pubspec.yaml`)
+- **Release:** `v2.7`
+- **Package Version:** `2.7.0` (see `pubspec.yaml`)
 - **Release Notes:** `CHANGELOG.MD`
 
-## Release Highlights (v2.6)
+## Release Highlights (v2.7)
 
-This release focuses on wallet parity, safer transaction handling, and improved session controls.
+This release adds an optional public on-chain message to sends.
 
+- **On-chain messages:** attach an optional note (up to 80 bytes) to a send, embedded via OP_RETURN, with a live byte counter and pre-send review since it's permanent and public.
 - **Advanced send parity:** richer send flow with robust fee handling, manual fee fallback, and clear transaction result metadata.
 - **Migration send parity:** stronger migration guardrails and batch migration handling.
 - **Signer hardening:** improved signature normalization and safer scriptCode derivation in signing internals.
@@ -55,6 +56,7 @@ For full version history and details, see `CHANGELOG.MD`.
 - **Seed Phrase Wallet:** 12/24-word recovery phrase support.
 - **Legacy WIF Wallet:** compatibility with existing private keys.
 - **Send/Receive:** standard transfer support with multiple address formats.
+- **On-Chain Messages:** attach an optional public note (up to 80 bytes) to a send via OP_RETURN.
 - **Coin Control:** manual UTXO selection for fee/privacy tuning.
 - **Network Visibility:** integrated network info and health metrics.
 - **Price Tracking:** in-app S256/USD price display.
