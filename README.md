@@ -1,6 +1,6 @@
 # S256 Coin Web-Wallet
 
-![Version](https://img.shields.io/badge/release-v2.8-1f6feb)
+![Version](https://img.shields.io/badge/release-v2.9-1f6feb)
 
 A modern, secure, non-custodial web wallet for the SHA256 Coin network. Private keys remain client-side and transactions are signed locally in the browser.
 
@@ -20,13 +20,18 @@ A modern, secure, non-custodial web wallet for the SHA256 Coin network. Private 
 
 ## Current Version
 
-- **Release:** `v2.8`
-- **Package Version:** `2.8.0` (see `pubspec.yaml`)
+- **Release:** `v2.9`
+- **Package Version:** `2.9.0` (see `pubspec.yaml`)
 - **Release Notes:** `CHANGELOG.MD`
 
-## Release Highlights (v2.8)
+## Release Highlights (v2.9)
 
-This release adds a choice of RPC server and fixed fee limits.
+This release adds an address book and payment requests, shared with the S256 Android wallet.
+
+- **Address book:** a Contacts tab with search, a contact picker in Send, and `.s256` import/export compatible with the Android wallet.
+- **Payment requests:** the Receive tab makes a `sha256coin:` QR code or a link that opens the wallet with the Send form filled in. The name in a request is shown as not verified, and a request that borrows a saved contact's name gets a warning.
+
+Earlier highlights (v2.8):
 
 - **Server connection:** choose which RPC server the wallet uses, with a "Custom server" badge and a "Reset to default" button. See [Choosing a server](#choosing-a-server).
 - **Fixed fee limits:** a wrong or dishonest server cannot make the wallet overpay.
@@ -65,6 +70,8 @@ For full version history and details, see `CHANGELOG.MD`.
 - **Send/Receive:** standard transfer support with multiple address formats.
 - **On-Chain Messages:** attach an optional public note (up to 80 bytes) to a send via OP_RETURN.
 - **Coin Control:** manual UTXO selection for fee/privacy tuning.
+- **Address Book & Payment Requests:** saved contacts (`.s256` import/export) and `sha256coin:` request QR codes and links.
+- **Server Connection:** use the default RPC proxy or your own.
 - **Network Visibility:** integrated network info and health metrics.
 - **Price Tracking:** in-app S256/USD price display.
 

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../config.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../providers/wallet_provider.dart';
@@ -169,8 +170,8 @@ import '../widgets/rpc_endpoint_dialog.dart';
                     ],
                   ],
                   const SizedBox(height: 40),
-                  const Text(
-                    'S256 Web-Wallet version 2.8 - Powered by SHA256 Coin Core',
+                  Text(
+                    'S256 Web-Wallet version ${Config.appVersion} - Powered by SHA256 Coin Core',
                     style: TextStyle(color: Colors.white54, fontSize: 14),
                     textAlign: TextAlign.center,
                   ),

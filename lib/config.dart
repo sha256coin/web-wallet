@@ -1,4 +1,8 @@
 class Config {
+  // Shown on the start, setup and settings screens. Keep in step with
+  // `version:` in pubspec.yaml and the CHANGELOG.
+  static const String appVersion = '2.9';
+
   // LiveCoinWatch API Configuration (Price Data Source)
   static const String liveCoinWatchUrl = 'https://api.livecoinwatch.com/coins/single';
   static const String liveCoinWatchApiKey = String.fromEnvironment('LIVECOINWATCH_API_KEY', defaultValue: '');
@@ -14,4 +18,4 @@ class Config {
   static const String s256GenesisHash =
       '00000000abe2a78ceb00eca81258804d59fe4ad45345e1750e705139e6da7297';
 
-}
+}
