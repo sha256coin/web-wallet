@@ -1,8 +1,12 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../models/wallet_model.dart';
 import '../models/transaction_model.dart';
 import '../services/wallet_service.dart';
 import '../services/storage_service.dart';
+import '../services/rpc_endpoint.dart';
+import '../services/rpc_endpoint_verifier.dart';
+import '../services/reachability_probe.dart';
 import '../config.dart';
 
 class WalletProvider with ChangeNotifier {
@@ -23,10 +27,22 @@ class WalletProvider with ChangeNotifier {
   int _txCount = 0;
   bool _rememberSessionEnabled = false;
   
-  // RPC Config
-  String _rpcUrl = 'https://sha256coin.eu/rpc';
-  String _rpcUser = '';
-  String _rpcPassword = '';
+  // RPC Config. The endpoint changes only through setCustomEndpoint and
+  // resetRpcEndpoint (settings UI). Credentials are never used.
+  String _rpcUrl = Config.defaultRpcUrl;
+  static const String _rpcUser = '';
+  static const String _rpcPassword = '';
+  int _endpointEpoch = 0; // bumped on every switch, to drop stale responses
+  bool _isCheckingEndpoint = false;
+  // The last wallet load stopped because the server could not be reached.
+  bool _rpcUnavailable = false;
+
+  bool get rpcUnavailable => _rpcUnavailable;
+
+  String get rpcUrl => _rpcUrl;
+  bool get usingCustomEndpoint => !RpcEndpointUrl.isDefault(_rpcUrl);
+  String get rpcHostLabel => RpcEndpointUrl.hostLabel(_rpcUrl);
+  bool get isCheckingEndpoint => _isCheckingEndpoint;
 
   WalletService get walletService => _walletService;
   WalletModel? get wallet => _wallet;
@@ -103,6 +119,7 @@ class WalletProvider with ChangeNotifier {
   }
 
   Future<void> fetchFeeRate() async {
+    final epoch = _endpointEpoch;
     _isFetchingFeeRate = true;
     _feeRateReady = false;
     _usingManualFeeRate = false;
@@ -119,6 +136,7 @@ class WalletProvider with ChangeNotifier {
         _rpcUser,
         _rpcPassword,
       );
+      if (epoch != _endpointEpoch) return; // endpoint changed meanwhile
       if (feeResult['success'] == true) {
         _feeRate = (feeResult['feeRate'] as num).toDouble();
         _feeRateReady = true;
@@ -157,6 +175,7 @@ class WalletProvider with ChangeNotifier {
             'Fee estimation unavailable. Manual fee required.';
       }
     } catch (_) {
+      if (epoch != _endpointEpoch) return;
       _feeRate = 0.0;
       _feeRateReady = false;
       _feeRateSource = 'unavailable';
@@ -166,7 +185,7 @@ class WalletProvider with ChangeNotifier {
       _feeRateStatusMessage =
           'Fee estimation unavailable. Enter a manual fee when sending.';
     } finally {
-      _isFetchingFeeRate = false;
+      if (epoch == _endpointEpoch) _isFetchingFeeRate = false;
       notifyListeners();
     }
   }
@@ -227,7 +246,7 @@ class WalletProvider with ChangeNotifier {
   }
 
   WalletProvider() {
-    _loadRpcConfig();
+    _loadRpcEndpoint();
     _initializeSessionPersistence();
   }
 
@@ -375,17 +394,86 @@ class WalletProvider with ChangeNotifier {
     _storage.savePersistentSession(payload, Config.sessionEncryptionSecretHex);
   }
 
-  void _loadRpcConfig() {
-    final config = _storage.loadRpcConfig();
-    if (config != null) {
-      _rpcUrl = config['url']!;
-      _rpcUser = config['user']!;
-      _rpcPassword = config['password']!;
+  // The stored endpoint is checked against the same rules as typed input, so a
+  // tampered value falls back to the default.
+  void _loadRpcEndpoint() {
+    final stored = _storage.loadCustomRpcEndpoint();
+    if (stored == null) return;
+    final result = RpcEndpointUrl.normalize(stored);
+    if (result.isValid && !RpcEndpointUrl.isDefault(result.url!)) {
+      _rpcUrl = result.url!;
     }
+  }
+
+  /// Checks and saves a custom endpoint. Returns null on success, otherwise a
+  /// readable error; on any error the previous setting is kept.
+  Future<String?> setCustomEndpoint(String input) async {
+    if (_isCheckingEndpoint) return 'Already checking an address. Please wait.';
+
+    final parsed = RpcEndpointUrl.normalize(input);
+    if (!parsed.isValid) return parsed.error;
+    final url = parsed.url!;
+
+    if (RpcEndpointUrl.isDefault(url)) {
+      resetRpcEndpoint();
+      return null;
+    }
+    if (url == _rpcUrl) return null;
+
+    final epoch = _endpointEpoch;
+    _isCheckingEndpoint = true;
+    notifyListeners();
+    try {
+      final check = await RpcEndpointVerifier(probe: probeReachable).verify(url);
+      if (!check.ok) return check.message;
+      if (epoch != _endpointEpoch) {
+        return 'The connection settings changed while checking. Please try again.';
+      }
+      if (!_storage.saveCustomRpcEndpoint(url)) {
+        return 'This browser did not allow the wallet to save the setting. '
+            'Check that site data is allowed.';
+      }
+      _applyEndpoint(url);
+      return null;
+    } finally {
+      _isCheckingEndpoint = false;
+      notifyListeners();
+    }
+  }
+
+  /// Restores the default endpoint. Always safe to call.
+  void resetRpcEndpoint() {
+    _storage.clearCustomRpcEndpoint();
+    if (_rpcUrl != Config.defaultRpcUrl) {
+      _applyEndpoint(Config.defaultRpcUrl);
+    }
+  }
+
+  void _applyEndpoint(String url) {
+    _rpcUrl = url;
+    _endpointEpoch++;
+
+    // Nothing fetched from the previous endpoint may be reused.
+    resetCoinControl();
+    _feeRate = 0.00001;
+    _isFetchingFeeRate = false;
+    _feeRateReady = false;
+    _usingManualFeeRate = false;
+    _feeRateSource = 'unavailable';
+    _feeBaselineRate = null;
+    _feeEstimatedRate = null;
+    _feeSanityCeiling = null;
+    _feeRateStatusMessage = 'Fee estimate not requested yet.';
+    _message = '';
+    _rpcUnavailable = false;
+    notifyListeners();
+
+    unawaited(refreshBalance());
   }
 
   void clearMessage() {
     _message = '';
+    _rpcUnavailable = false;
     notifyListeners();
   }
 
@@ -424,11 +512,13 @@ class WalletProvider with ChangeNotifier {
 
       if (_wallet == null) return;
 
+      final epoch = _endpointEpoch;
       try {
         // If rpcRequest throws an exception due to a 404/disconnect, it jumps straight to catch
         final utxos = await _walletService.getUtxos(
             _rpcUrl, _rpcUser, _rpcPassword, _wallet!.address);
-            
+        if (epoch != _endpointEpoch || _wallet == null) return;
+
         final balance = _walletService.calculateBalance(utxos);
         final unconfirmed = _walletService.calculateUnconfirmedBalance(utxos);
         final hasMempoolActivity = utxos.any((u) => u['confirmations'] == 0);
@@ -450,6 +540,7 @@ class WalletProvider with ChangeNotifier {
         // Refresh transaction history in background
         fetchTransactions();
       } catch (_) {
+        if (epoch != _endpointEpoch) return;
         // 💡 Update message state so the dashboard can show a 'Connection Lost / Working Offline' banner
         _message = '⚠️ Connection lost. Displaying cached balances.';
         notifyListeners();
@@ -851,6 +942,7 @@ class WalletProvider with ChangeNotifier {
 
     Future<void> fetchUtxosForCoinControl() async {
       if (_wallet == null) return;
+      final epoch = _endpointEpoch;
       _isLoadingUtxos = true;
       _availableUtxos = [];
       _selectedUtxoKeys = {};
@@ -862,6 +954,7 @@ class WalletProvider with ChangeNotifier {
         final all = await _walletService.getUtxos(
           _rpcUrl, _rpcUser, _rpcPassword, _wallet!.address,
         );
+        if (epoch != _endpointEpoch) return;
         _availableUtxos = all
             .where((u) => u['txid'] != 'pending_marker' && (u['confirmations'] as int) > 0)
             .toList();
@@ -876,7 +969,7 @@ class WalletProvider with ChangeNotifier {
         await fetchFeeRate();
       } catch (_) {
       } finally {
-        _isLoadingUtxos = false;
+        if (epoch == _endpointEpoch) _isLoadingUtxos = false;
         notifyListeners();
       }
     }
@@ -948,9 +1041,14 @@ class WalletProvider with ChangeNotifier {
     }
 
     // Changed from Future<void> to Future<bool>
-    Future<bool> loadSeedWallet(String mnemonic) async {
+    Future<bool> loadSeedWallet(
+      String mnemonic, {
+      bool persistSession = true,
+      bool showLoadedMessage = true,
+    }) async {
       _isLoading = true;
       _message = '⏳ Loading wallet...';
+      _rpcUnavailable = false;
       notifyListeners();
 
       // Give the UI a moment to render the spinner
@@ -959,6 +1057,7 @@ class WalletProvider with ChangeNotifier {
       // 1. Validate the RPC Connection first
       if (!await _isRpcAvailable()) {
         _message = '❌ RPC Connection unavailable. Check your network.';
+        _rpcUnavailable = true;
         _isLoading = false;
         notifyListeners();
         return false;
@@ -990,15 +1089,19 @@ class WalletProvider with ChangeNotifier {
         );
 
         _isLoading = false;
-        _message = '✅ Wallet loaded successfully!';
-        _persistCurrentSession();
+        _message = showLoadedMessage ? '✅ Wallet loaded successfully!' : '';
+        if (persistSession) {
+          _persistCurrentSession();
+        }
         notifyListeners();
-        
+
         // Auto-clear success message
-        Future.delayed(const Duration(seconds: 5), () {
-          if (_message.contains('✅')) _message = '';
-          notifyListeners();
-        });
+        if (showLoadedMessage) {
+          Future.delayed(const Duration(seconds: 5), () {
+            if (_message.contains('✅')) _message = '';
+            notifyListeners();
+          });
+        }
 
         // Load transaction history in background
         fetchTransactions();
@@ -1013,9 +1116,14 @@ class WalletProvider with ChangeNotifier {
     }
 
     // Changed from Future<void> to Future<bool>
-    Future<bool> loadWifWallet(String wif) async {
+    Future<bool> loadWifWallet(
+      String wif, {
+      bool persistSession = true,
+      bool showLoadedMessage = true,
+    }) async {
       _isLoading = true;
       _message = '⏳ Loading wallet...';
+      _rpcUnavailable = false;
       notifyListeners();
 
       await Future.delayed(const Duration(milliseconds: 500));
@@ -1023,6 +1131,7 @@ class WalletProvider with ChangeNotifier {
       // 1. Validate the RPC Connection first
       if (!await _isRpcAvailable()) {
         _message = '❌ RPC Connection unavailable. Check your network.';
+        _rpcUnavailable = true;
         _isLoading = false;
         notifyListeners();
         return false;
@@ -1050,15 +1159,19 @@ class WalletProvider with ChangeNotifier {
         );
 
         _isLoading = false;
-        _message = '✅ Wallet loaded successfully!';
-        _persistCurrentSession();
+        _message = showLoadedMessage ? '✅ Wallet loaded successfully!' : '';
+        if (persistSession) {
+          _persistCurrentSession();
+        }
         notifyListeners();
 
         // Auto-clear success message
-        Future.delayed(const Duration(seconds: 5), () {
-          if (_message.contains('✅')) _message = '';
-          notifyListeners();
-        });
+        if (showLoadedMessage) {
+          Future.delayed(const Duration(seconds: 5), () {
+            if (_message.contains('✅')) _message = '';
+            notifyListeners();
+          });
+        }
 
         // Load transaction history in background
         fetchTransactions();

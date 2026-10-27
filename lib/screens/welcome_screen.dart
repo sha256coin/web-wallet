@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'setup_screen.dart';
 import '../theme/app_theme.dart';
+import '../widgets/custom_endpoint_badge.dart';
 import '../widgets/footer_widget.dart';
+import '../widgets/rpc_endpoint_dialog.dart';
 
 class WelcomeScreen extends StatefulWidget {
   const WelcomeScreen({super.key});
@@ -117,10 +119,25 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                           'Your keys never leave your browser.',
                           style: TextStyle(color: Colors.white38, fontSize: 14),
                         ),
-                        const SizedBox(height: 10),
+                        const SizedBox(height: 6),
+                        Wrap(
+                          alignment: WrapAlignment.center,
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          spacing: 8,
+                          children: [
+                            TextButton.icon(
+                              onPressed: () => showRpcEndpointDialog(context),
+                              icon: const Icon(Icons.dns_rounded, size: 16),
+                              label: const Text('Server connection'),
+                              style: TextButton.styleFrom(foregroundColor: Colors.white54),
+                            ),
+                            const CustomEndpointBadge(),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
                         const Padding(
                                 padding: EdgeInsets.symmetric(horizontal: 16),
-                                child: Text('S256 Web-Wallet version 2.7 - Powered by SHA256 Coin Core', 
+                                child: Text('S256 Web-Wallet version 2.8 - Powered by SHA256 Coin Core', 
                                 style: TextStyle(color: Colors.white54, fontSize: 12),
                                 textAlign: TextAlign.center
                           ),      

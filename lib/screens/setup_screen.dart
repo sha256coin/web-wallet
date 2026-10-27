@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../providers/wallet_provider.dart';
 import '../theme/app_theme.dart';
+import '../widgets/rpc_endpoint_dialog.dart';
 
   class SetupScreen extends StatefulWidget {
     final bool useSeed;
@@ -156,10 +157,20 @@ import '../theme/app_theme.dart';
                       ),
                       textAlign: TextAlign.center,
                     ),
+                    if (provider.rpcUnavailable) ...[
+                      const SizedBox(height: 8),
+                      Center(
+                        child: TextButton.icon(
+                          onPressed: () => showRpcEndpointDialog(context),
+                          icon: const Icon(Icons.dns_rounded, size: 16),
+                          label: const Text('Choose another server'),
+                        ),
+                      ),
+                    ],
                   ],
                   const SizedBox(height: 40),
                   const Text(
-                    'S256 Web-Wallet version 2.7 - Powered by SHA256 Coin Core',
+                    'S256 Web-Wallet version 2.8 - Powered by SHA256 Coin Core',
                     style: TextStyle(color: Colors.white54, fontSize: 14),
                     textAlign: TextAlign.center,
                   ),

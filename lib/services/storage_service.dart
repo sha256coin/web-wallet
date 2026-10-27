@@ -13,6 +13,7 @@ class StorageService {
     '${_keyPrefix}persistent_session_enabled';
   static const String _disclaimerAcceptedKey =
     '${_keyPrefix}disclaimer_accepted';
+  static const String _customRpcEndpointKey = '${_keyPrefix}rpc_endpoint';
 
   // Simple AES-like encryption using XOR with password hash
   String _encrypt(String data, String password) {
@@ -67,31 +68,29 @@ class StorageService {
     web.window.localStorage.removeItem('${_keyPrefix}wallet');
   }
 
-  // Save RPC config
-  void saveRpcConfig(String url, String user, String password) {
-    final config = jsonEncode({
-      'url': url,
-      'user': user,
-      'password': password,
-    });
-    web.window.localStorage.setItem('${_keyPrefix}rpc', config);
+  // Custom RPC endpoint: a device setting kept apart from wallet and session keys.
+  // Callers must validate what they read back (see RpcEndpointUrl).
+  bool saveCustomRpcEndpoint(String url) {
+    try {
+      web.window.localStorage.setItem(_customRpcEndpointKey, url);
+      return true;
+    } catch (_) {
+      return false;
+    }
   }
 
-  // Load RPC config
-  Map<String, String>? loadRpcConfig() {
-    final config = web.window.localStorage.getItem('${_keyPrefix}rpc');
-    if (config == null) return null;
-
+  String? loadCustomRpcEndpoint() {
     try {
-      final decoded = jsonDecode(config) as Map<String, dynamic>;
-      return {
-        'url': decoded['url'] as String,
-        'user': decoded['user'] as String,
-        'password': decoded['password'] as String,
-      };
-    } catch (e) {
+      return web.window.localStorage.getItem(_customRpcEndpointKey);
+    } catch (_) {
       return null;
     }
+  }
+
+  void clearCustomRpcEndpoint() {
+    try {
+      web.window.localStorage.removeItem(_customRpcEndpointKey);
+    } catch (_) {}
   }
 
   // Session storage (cleared when browser closes)
