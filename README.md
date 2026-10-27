@@ -131,6 +131,11 @@ Open **Server connection** on the start screen, or in **Settings** after loading
 
 Whatever the server reports, the wallet will not send a transaction if the fee rate is above 0.01 S256/kvB, or if it is above 0.0004 S256/kvB and the fee is more than 10% of the amount sent. If the server reports a rate above the limit, automatic fees are treated as unavailable and you can enter a manual fee instead; manual fees are checked against the same limits before signing.
 
+## Backup and portability
+
+- Back up your 12- or 24-word seed phrase, or your private key (WIF), offline. Anyone who has it controls the funds, and nobody can recover it for you.
+- Your keys are not tied to this website. The private key (WIF) can be imported into S256 Core: see [IMPORT_KEY_INTO_CORE.md](IMPORT_KEY_INTO_CORE.md). Seed phrase wallets here use the first address of the BIP44 path `m/44'/0'/0'/0/0` (a native SegWit `s21...` address), which is worth knowing when you restore elsewhere.
+
 ## Running your own server
 
 A server that works with the wallet must serve HTTPS (or be used at `http://localhost`), answer the JSON-RPC calls the wallet makes and forward only those (never expose wallet or administrative methods, or a node's raw RPC port), and allow the wallet's origin with CORS: answer the `OPTIONS` preflight, allow `POST` and the `Content-Type` header, and send exactly one `Access-Control-Allow-Origin` header matching the origin the wallet is loaded from. The methods used are `scantxoutset`, `getblockcount`, `getrawmempool`, `getrawtransaction`, `gettxout`, `estimatesmartfee`, `getnetworkinfo`, `getmempoolinfo`, `getblockchaininfo`, `getmininginfo`, `validateaddress`, `sendrawtransaction`, plus `getblockhash` for block 0 when saving a server.
