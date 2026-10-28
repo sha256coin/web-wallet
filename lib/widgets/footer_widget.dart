@@ -331,18 +331,18 @@ class FooterWidget extends StatelessWidget {
             const FaIcon(FontAwesomeIcons.bolt, color: Colors.amber, size: 12),
             const SizedBox(width: 8),
             Text(
-              'Made in ',
+              'Hosted in ',
               style: TextStyle(color: Colors.white.withValues(alpha: 0.3), fontSize: 13),
             ),
             const FaIcon(FontAwesomeIcons.locationDot, color: Colors.redAccent, size: 12),
             const SizedBox(width: 6),
+            _OriginLink(
+              label: 'Romania',
+              onTap: () => _launchUrl('https://discoveromania.ro/'),
+            ),
             Text(
-              'Romania 🇷🇴',
-              style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.3),
-                fontSize: 13,
-                fontWeight: FontWeight.w500,
-              ),
+              ' 🇷🇴',
+              style: TextStyle(color: Colors.white.withValues(alpha: 0.3), fontSize: 13),
             ),
           ],
         );
@@ -444,4 +444,40 @@ class _FooterLink {
   final dynamic icon;
 
   _FooterLink(this.name, this.url, {required this.icon});
+}
+
+class _OriginLink extends StatefulWidget {
+  final String label;
+  final VoidCallback onTap;
+
+  const _OriginLink({required this.label, required this.onTap});
+
+  @override
+  State<_OriginLink> createState() => _OriginLinkState();
+}
+
+class _OriginLinkState extends State<_OriginLink> {
+  bool _hover = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) => setState(() => _hover = true),
+      onExit: (_) => setState(() => _hover = false),
+      child: GestureDetector(
+        onTap: widget.onTap,
+        child: Text(
+          widget.label,
+          style: TextStyle(
+            color: const Color(0xFFFFBF55),
+            fontSize: 13,
+            fontWeight: FontWeight.w500,
+            decoration: _hover ? TextDecoration.underline : TextDecoration.none,
+            decorationColor: const Color(0xFFFFBF55),
+          ),
+        ),
+      ),
+    );
+  }
 }
