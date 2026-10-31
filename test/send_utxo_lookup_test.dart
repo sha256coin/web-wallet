@@ -83,4 +83,40 @@ void main() {
     expect(calls['gettxout'], isNull);
     expect(calls['sendrawtransaction'], 1);
   });
+
+  // Advanced send: the coin-control list comes from getUtxos and the user's
+  // picks are passed back as preSelectedUtxos.
+  test('an advanced send with picked UTXOs makes no gettxout calls', () async {
+    late Map<String, dynamic> result;
+    final calls = await withNode(50, () async {
+      final all = await service.getUtxos('http://127.0.0.1/ok', '', '', address);
+      final picked = [all[3], all[7]];
+      result = await service.sendTransaction(
+        'http://127.0.0.1/ok', '', '',
+        wallet['privateKey']!, address, address, 1.5,
+        manualFeeRateCoinPerKb: 0.0001,
+        preSelectedUtxos: picked,
+      );
+    });
+    expect(result['success'], isTrue, reason: '$result');
+    expect(calls['gettxout'], isNull);
+  });
+
+  test('picked UTXOs without a script are still looked up', () async {
+    late Map<String, dynamic> result;
+    final calls = await withNode(5, () async {
+      final picked = [
+        for (final txid in ['01' * 32, '02' * 32])
+          {'txid': txid, 'vout': 0, 'amount': 1.0, 'height': 100, 'confirmations': 101},
+      ];
+      result = await service.sendTransaction(
+        'http://127.0.0.1/ok', '', '',
+        wallet['privateKey']!, address, address, 1.5,
+        manualFeeRateCoinPerKb: 0.0001,
+        preSelectedUtxos: picked,
+      );
+    });
+    expect(result['success'], isTrue, reason: '$result');
+    expect(calls['gettxout'], 2);
+  });
 }
