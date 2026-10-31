@@ -4,6 +4,17 @@ All notable changes to this project are documented in this file.
 
 The format is inspired by Keep a Changelog and this project follows semantic versioning for release tags.
 
+## [3.0.1] - 2026-10-31
+
+### Changed
+
+- The balance chart is a real chart now: taller, with time along the bottom, a stepped line (the balance only changes at a transaction), round gridlines with their values, the first and last date, green and red markers for coins in and out, and a crosshair with date, balance and change when you point at (or touch) a transaction. While something is pending, a dashed step at the right edge shows where the balance is going.
+- The Network screen has the new look: block height, hashrate, difficulty and peers as large figures, then the mempool and node details, with the connection status and the server in use at the top.
+
+### Fixed
+
+- The balance chart showed wrong values between its first and last point: it undid the transactions oldest first instead of newest first. It also started from the balance including pending transactions, which the explorer's list does not contain. It now walks back from the confirmed balance, newest first, like the Android wallet (1.6.6).
+
 ## [3.0.0] - 2026-10-31
 
 A new look that matches sha256coin.eu, the explorer and the Android wallet ("Digital Platinum"), and the price from the explorer. Dark theme only. Nothing in how keys, addresses or transactions are handled has changed.

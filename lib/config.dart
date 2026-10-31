@@ -1,7 +1,7 @@
 class Config {
   // Shown on the start, setup and settings screens. Keep in step with
   // `version:` in pubspec.yaml and the CHANGELOG.
-  static const String appVersion = '3.0';
+  static const String appVersion = '3.0.1';
 
   // S256 price (the explorer reads it from LiveCoinWatch with its own API key)
   static const String explorerUrl = 'https://explorer.sha256coin.eu';
