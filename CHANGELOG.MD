@@ -4,6 +4,18 @@ All notable changes to this project are documented in this file.
 
 The format is inspired by Keep a Changelog and this project follows semantic versioning for release tags.
 
+## [Unreleased]
+
+### Changed
+
+- The S256 price comes from the explorer (`explorer.sha256coin.eu/api/price`), the same source as the Android wallet, instead of calling LiveCoinWatch from the browser. The LiveCoinWatch API key is no longer built into the app (`LIVECOINWATCH_API_KEY` is gone from `dart_defines.json`).
+- While no market trades S256, the price box shows the last traded price with "last traded <date>" under it, and its tooltip says it is not a live price.
+- A failed price refresh keeps the last known price instead of showing "data unavailable".
+
+### Removed
+
+- The 24h change under the price: the explorer does not provide it yet.
+
 ## [2.9.0] - 2026-10-27
 
 Works with the S256 Android wallet: the address book files (`.s256`) and the `sha256coin:` payment request format are the same.

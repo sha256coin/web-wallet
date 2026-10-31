@@ -3,12 +3,12 @@ class Config {
   // `version:` in pubspec.yaml and the CHANGELOG.
   static const String appVersion = '2.9';
 
-  // LiveCoinWatch API Configuration (Price Data Source)
-  static const String liveCoinWatchUrl = 'https://api.livecoinwatch.com/coins/single';
-  static const String liveCoinWatchApiKey = String.fromEnvironment('LIVECOINWATCH_API_KEY', defaultValue: '');
+  // S256 price (the explorer reads it from LiveCoinWatch with its own API key)
+  static const String explorerUrl = 'https://explorer.sha256coin.eu';
+  static const String priceEndpoint = '/api/price';
+
   static const String sessionEncryptionSecretHex =
       String.fromEnvironment('SESSION_ENCRYPTION_SECRET_HEX', defaultValue: '');
-  static const String s256Code = 'S256';
 
   // Default RPC proxy. It can only be replaced from the settings UI.
   static const String defaultRpcUrl = 'https://sha256coin.eu/rpc';

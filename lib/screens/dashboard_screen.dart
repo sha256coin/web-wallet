@@ -168,7 +168,8 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
     final price = await _priceService.getS256Price();
     if (mounted) {
       setState(() {
-        _priceData = price;
+        // A failed refresh keeps the last known price.
+        _priceData = price ?? _priceData;
         _priceLoading = false;
       });
     }
@@ -390,10 +391,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
           IconButton(
             onPressed: () {
               provider.refreshBalance();
-              setState(() {
-                _priceLoading = true;
-                _priceData = null;
-              });
+              setState(() => _priceLoading = true);
               _fetchPrice();
             },
             icon: const Icon(Icons.refresh_rounded),
@@ -569,10 +567,12 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
               ClipRRect(
                 borderRadius: BorderRadius.circular(16),
                 child: Tooltip(
-                  message: _priceData != null
-                      ? 'Price updated from LiveCoinWatch\n'
-                          '• 24h change: ${_priceData!.changePercent24h.toStringAsFixed(2)}%'
-                      : 'Price data unavailable',
+                  message: _priceData == null
+                      ? 'Price data unavailable'
+                      : _priceData!.isLastTrade
+                          ? 'Last traded price, not a live price:\n'
+                              'LiveCoinWatch currently sees no market trading S256'
+                          : 'Live price from LiveCoinWatch',
                   child: _buildFloatingPriceWidget(wallet.totalBalance),
                 ),
               ),
@@ -650,32 +650,14 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                       fontWeight: FontWeight.bold,
                     ),
                   ),
-                  const SizedBox(height: 4),
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        _priceData!.changePercent24h >= 0
-                            ? Icons.arrow_upward_rounded
-                            : Icons.arrow_downward_rounded,
-                        color: _priceData!.changePercent24h >= 0
-                            ? Colors.greenAccent
-                            : Colors.redAccent,
-                        size: 14,
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        '${_priceData!.changePercent24h.abs().toStringAsFixed(2)} %',
-                        style: TextStyle(
-                          color: _priceData!.changePercent24h >= 0
-                              ? Colors.greenAccent
-                              : Colors.redAccent,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
-                  ),
+                  // Not a live price: say when it last traded
+                  if (_priceData!.isLastTrade) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      'last traded ${PriceData.formatDate(_priceData!.lastTraded!)}',
+                      style: const TextStyle(color: Colors.white54, fontSize: 11),
+                    ),
+                  ],
                   const SizedBox(height: 8),
                   const Divider(height: 1, color: Colors.white24),
                   const SizedBox(height: 8),

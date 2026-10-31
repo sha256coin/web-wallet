@@ -2,69 +2,64 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../config.dart';
 
-  class PriceData {
-    final double price;
-    final String currency;
-    final DateTime lastUpdated;
-    final double changePercent24h;
+/// S256 price from the explorer's /api/price, which reads it from
+/// LiveCoinWatch (the API key stays on the server).
+///
+/// While no market trades S256 the explorer sends the last traded price and
+/// [lastTraded], the time of that price. Then it is not a live price.
+class PriceData {
+  final double price;
 
-    PriceData({
-      required this.price,
-      required this.currency,
-      required this.lastUpdated,
-      required this.changePercent24h,
-    });
+  /// When [price] was last traded, or null when it is a live price.
+  final DateTime? lastTraded;
+
+  const PriceData({required this.price, this.lastTraded});
+
+  bool get isLastTrade => lastTraded != null;
+
+  /// Null when the answer has no usable price (missing, zero, negative or
+  /// not a number): LiveCoinWatch returns nulls for a coin it has no rate for.
+  static PriceData? fromJson(Map<String, dynamic> json) {
+    double? number(dynamic v) =>
+        v is num && v.isFinite && v > 0 ? v.toDouble() : null;
+    final price = number(json['price']);
+    if (price == null) return null;
+    final ms = number(json['lastTraded']);
+    return PriceData(
+      price: price,
+      lastTraded: ms == null
+          ? null
+          : DateTime.fromMillisecondsSinceEpoch(ms.toInt(), isUtc: true),
+    );
   }
 
-  double _parseDelta(Map<String, dynamic>? delta) {
-    if (delta == null) return 0.0;
-    
-    // Try day first, then hour (scaled), then week as last resort
-    final day = delta['day'];
-    if (day != null) return ((day as num).toDouble() - 1.0) * 100;
-
-    final hour = delta['hour'];
-    if (hour != null) return ((hour as num).toDouble() - 1.0) * 100;
-
-    final week = delta['week'];
-    if (week != null) return ((week as num).toDouble() - 1.0) * 100;
-
-    return 0.0;
+  /// "18 Oct 2026" (UTC).
+  static String formatDate(DateTime date) {
+    const months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+    ];
+    final d = date.toUtc();
+    return '${d.day} ${months[d.month - 1]} ${d.year}';
   }
+}
 
-  class PriceService {
-    Future<PriceData?> getS256Price({String currency = 'USD'}) async {
-      try {
-        final response = await http.post(
-          Uri.parse(Config.liveCoinWatchUrl),
-          headers: {
-            'Content-Type': 'application/json',
-            'x-api-key': Config.liveCoinWatchApiKey,
-          },
-          body: jsonEncode({
-            'currency': currency,
-            'code': Config.s256Code,
-          }),
-        ).timeout(
-          const Duration(seconds: 10),
-          onTimeout: () => throw Exception('Request timeout'),
-        );
-
-        if (response.statusCode == 200) {
-          final data = jsonDecode(response.body);
-          return PriceData(
-            price: (data['rate'] as num).toDouble(),
-            currency: currency,
-            lastUpdated: DateTime.now(),
-            changePercent24h: _parseDelta(data['delta']),
-          );
-        } else {
-          print('Error fetching price: ${response.statusCode}');
-          return null;
-        }
-      } catch (e) {
-        print('Exception fetching price: $e');
+class PriceService {
+  /// The current price, or null when there is none or the request failed.
+  Future<PriceData?> getS256Price() async {
+    try {
+      final response = await http
+          .get(Uri.parse('${Config.explorerUrl}${Config.priceEndpoint}'))
+          .timeout(const Duration(seconds: 10));
+      if (response.statusCode != 200) {
+        print('Error fetching price: ${response.statusCode}');
         return null;
       }
+      final data = jsonDecode(response.body);
+      return data is Map<String, dynamic> ? PriceData.fromJson(data) : null;
+    } catch (e) {
+      print('Exception fetching price: $e');
+      return null;
     }
   }
+}

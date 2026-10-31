@@ -125,7 +125,7 @@ Open **Server connection** on the start screen, or in **Settings** after loading
 
 **Checks before saving.** The wallet asks the server for `getblockchaininfo` and for the hash of block 0, which must be the S256 genesis block (`00000000abe2a78ceb00eca81258804d59fe4ad45345e1750e705139e6da7297`). If any check fails, your previous setting is kept and the message says why (unreachable, timed out, request refused, not a node, wrong network, or blocked by CORS).
 
-**Not affected by this setting.** Transaction history and the pending-transaction fallback use the project's explorer (`explorer.sha256coin.eu`, `sha256coin.eu/api/mempool`), so your address is sent there even with a custom server. Price data comes from `api.livecoinwatch.com` and sends no address.
+**Not affected by this setting.** Transaction history and the pending-transaction fallback use the project's explorer (`explorer.sha256coin.eu`, `sha256coin.eu/api/mempool`), so your address is sent there even with a custom server. The price also comes from the explorer (`explorer.sha256coin.eu/api/price`, which reads LiveCoinWatch with its own key) and sends no address.
 
 ### Fee limits
 
