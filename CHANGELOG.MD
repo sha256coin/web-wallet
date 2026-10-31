@@ -21,6 +21,10 @@ A new look that matches sha256coin.eu, the explorer and the Android wallet ("Dig
 - The receive QR code stays on pure white so every scanner reads it.
 - The loading screen before the app starts uses the same colours and grid.
 
+### Fixed
+
+- Sending from a wallet with many UTXOs took a long time: before signing, the wallet asked the node for every UTXO's script with a separate `gettxout` call, one after another (200 UTXOs meant 200 round trips). The script now comes from the `scantxoutset` answer the wallet already has, so a send needs no extra lookups. A script that is not the wallet address's own is not trusted and is still looked up.
+
 - The S256 price comes from the explorer (`explorer.sha256coin.eu/api/price`), the same source as the Android wallet, instead of calling LiveCoinWatch from the browser. The LiveCoinWatch API key is no longer built into the app (`LIVECOINWATCH_API_KEY` is gone from `dart_defines.json`).
 - While no market trades S256, the price box shows the last traded price with "last traded <date>" under it, and its tooltip says it is not a live price.
 - A failed price refresh keeps the last known price instead of showing "data unavailable".
