@@ -572,7 +572,10 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                       : _priceData!.isLastTrade
                           ? 'Last traded price, not a live price:\n'
                               'LiveCoinWatch currently sees no market trading S256'
-                          : 'Live price from LiveCoinWatch',
+                          : _priceData!.change24h == null
+                              ? 'Live price from LiveCoinWatch'
+                              : 'Live price from LiveCoinWatch\n'
+                                  '• 24h change: ${_priceData!.change24h!.toStringAsFixed(2)}%',
                   child: _buildFloatingPriceWidget(wallet.totalBalance),
                 ),
               ),
@@ -650,6 +653,28 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                       fontWeight: FontWeight.bold,
                     ),
                   ),
+                  if (_priceData!.change24h case final change?) ...[
+                    const SizedBox(height: 4),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          change >= 0 ? Icons.arrow_upward_rounded : Icons.arrow_downward_rounded,
+                          color: change >= 0 ? Colors.greenAccent : Colors.redAccent,
+                          size: 14,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          '${change.abs().toStringAsFixed(2)} %',
+                          style: TextStyle(
+                            color: change >= 0 ? Colors.greenAccent : Colors.redAccent,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                   // Not a live price: say when it last traded
                   if (_priceData!.isLastTrade) ...[
                     const SizedBox(height: 4),

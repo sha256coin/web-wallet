@@ -13,7 +13,11 @@ class PriceData {
   /// When [price] was last traded, or null when it is a live price.
   final DateTime? lastTraded;
 
-  const PriceData({required this.price, this.lastTraded});
+  /// 24h change in percent, or null when the explorer has none (always null
+  /// for a last traded price).
+  final double? change24h;
+
+  const PriceData({required this.price, this.lastTraded, this.change24h});
 
   bool get isLastTrade => lastTraded != null;
 
@@ -25,11 +29,15 @@ class PriceData {
     final price = number(json['price']);
     if (price == null) return null;
     final ms = number(json['lastTraded']);
+    final change = json['change24h'];
     return PriceData(
       price: price,
       lastTraded: ms == null
           ? null
           : DateTime.fromMillisecondsSinceEpoch(ms.toInt(), isUtc: true),
+      change24h: ms == null && change is num && change.isFinite
+          ? change.toDouble()
+          : null,
     );
   }
 

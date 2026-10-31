@@ -14,6 +14,14 @@ void main() {
       final p = PriceData.fromJson({'name': 'SHA256COIN', 'price': 0.0123, 'volume': 1500, 'cap': 2500000.5});
       expect(p!.price, 0.0123);
       expect(p.isLastTrade, isFalse);
+      expect(p.change24h, isNull);
+    });
+
+    test('reads the 24h change, never for a last traded price', () {
+      expect(PriceData.fromJson({'price': 0.05, 'change24h': -2.35})!.change24h, -2.35);
+      expect(PriceData.fromJson({'price': 0.05, 'change24h': null})!.change24h, isNull);
+      expect(PriceData.fromJson({'price': 0.05, 'change24h': '5'})!.change24h, isNull);
+      expect(PriceData.fromJson({'price': 0.05, 'change24h': 3.1, 'lastTraded': 1792295700000})!.change24h, isNull);
     });
 
     test('a last traded price carries its date', () {
