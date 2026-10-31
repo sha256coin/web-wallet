@@ -3,7 +3,7 @@ import 'package:provider/provider.dart';
 import 'providers/address_book_provider.dart';
 import 'providers/wallet_provider.dart';
 import 'services/payment_link_inbox.dart';
-import 'theme/app_theme.dart';
+import 'theme/s256_theme.dart';
 import 'screens/welcome_screen.dart';
 import 'screens/dashboard_screen.dart';
 
@@ -32,7 +32,7 @@ class S256WebWallet extends StatelessWidget {
     return MaterialApp(
       title: 'S256 Web Wallet',
       debugShowCheckedModeBanner: false,
-      theme: AppTheme.darkTheme,
+      theme: S256Theme.dark,
       home: Consumer<WalletProvider>(
         builder: (context, walletProvider, _) {
           if (walletProvider.isLoaded) {

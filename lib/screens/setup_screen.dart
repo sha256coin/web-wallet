@@ -3,7 +3,8 @@ import '../config.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../providers/wallet_provider.dart';
-import '../theme/app_theme.dart';
+import '../theme/s256_theme.dart';
+import '../widgets/hud.dart';
 import '../widgets/rpc_endpoint_dialog.dart';
 
   class SetupScreen extends StatefulWidget {
@@ -117,7 +118,9 @@ import '../widgets/rpc_endpoint_dialog.dart';
             },
           ),
         ),
-        body: Center(
+        extendBodyBehindAppBar: true,
+        body: GridBackground(
+          child: Center(
           child: SingleChildScrollView(
             padding: const EdgeInsets.all(24),
             child: Container(
@@ -125,12 +128,15 @@ import '../widgets/rpc_endpoint_dialog.dart';
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Text(
+                  const SizedBox(height: 32),
+                  Center(child: HudLabel(widget.useSeed ? 'BIP39 · seed phrase' : 'WIF · private key')),
+                  const SizedBox(height: 10),
+                  PlatinumText(
                     widget.useSeed ? 'Seed Phrase Wallet' : 'Legacy WIF Wallet',
-                    style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold),
+                    style: const TextStyle(fontFamily: S256Theme.display, fontSize: 34, fontWeight: FontWeight.w700),
                     textAlign: TextAlign.center,
                   ),
-                  const SizedBox(height: 40),
+                  const SizedBox(height: 36),
                   if (!_isGenerating) ...[
                     _buildLoadSection(provider),
                     const SizedBox(height: 40),
@@ -139,7 +145,7 @@ import '../widgets/rpc_endpoint_dialog.dart';
                         Expanded(child: Divider()),
                         Padding(
                           padding: EdgeInsets.symmetric(horizontal: 16),
-                          child: Text('OR', style: TextStyle(color: Colors.white38)),
+                          child: Text('OR', style: TextStyle(color: S256Colors.textLight, fontFamily: S256Theme.mono, letterSpacing: 2)),
                         ),
                         Expanded(child: Divider()),
                       ],
@@ -154,7 +160,7 @@ import '../widgets/rpc_endpoint_dialog.dart';
                     Text(
                       provider.message,
                       style: TextStyle(
-                        color: provider.message.contains('❌') ? Colors.red : Colors.green,
+                        color: provider.message.contains('❌') ? S256Colors.danger : S256Colors.success,
                       ),
                       textAlign: TextAlign.center,
                     ),
@@ -170,9 +176,9 @@ import '../widgets/rpc_endpoint_dialog.dart';
                     ],
                   ],
                   const SizedBox(height: 40),
-                  Text(
-                    'S256 Web-Wallet version ${Config.appVersion} - Powered by SHA256 Coin Core',
-                    style: TextStyle(color: Colors.white54, fontSize: 14),
+                  const Text(
+                    'S256 WEB WALLET v${Config.appVersion} · POWERED BY SHA256 COIN CORE',
+                    style: TextStyle(color: S256Colors.textLight, fontSize: 11, fontFamily: S256Theme.mono, letterSpacing: 1.2),
                     textAlign: TextAlign.center,
                   ),
                 ],
@@ -180,19 +186,19 @@ import '../widgets/rpc_endpoint_dialog.dart';
             ),
           ),
         ),
+        ),
       );
     }
 
     Widget _buildLoadSection(WalletProvider provider) {
-      return Card(
-        child: Padding(
+      return HudCard(
           padding: const EdgeInsets.all(24),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text(
+              HudTitle(
                 widget.useSeed ? 'Restore from Seed' : 'Import Private Key',
-                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                label: 'Existing wallet',
               ),
               const SizedBox(height: 16),
               TextField(
@@ -205,8 +211,9 @@ import '../widgets/rpc_endpoint_dialog.dart';
                   helperText: widget.useSeed 
                     ? null 
                     : 'Note: Only S256 network WIF keys are supported.',
-                  helperStyle: const TextStyle(color: Colors.orangeAccent, fontSize: 12),
+                  helperStyle: const TextStyle(color: S256Colors.accent, fontSize: 12),
                 ),
+                style: const TextStyle(fontFamily: S256Theme.mono, fontSize: 14),
               ),
               const SizedBox(height: 24),
               ElevatedButton(
@@ -217,7 +224,6 @@ import '../widgets/rpc_endpoint_dialog.dart';
               ),
             ],
           ),
-        ),
       );
     }
 
@@ -228,7 +234,8 @@ import '../widgets/rpc_endpoint_dialog.dart';
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const Text('Seed Length: '),
+                const HudLabel('Seed length', slashes: false, color: S256Colors.textLight),
+                const SizedBox(width: 12),
                 ChoiceChip(
                   label: const Text('12 Words'),
                   selected: _seedWordCount == 12,
@@ -255,8 +262,8 @@ import '../widgets/rpc_endpoint_dialog.dart';
               label: const Text('Generate New Seed Phrase'),
               style: OutlinedButton.styleFrom(
                 padding: const EdgeInsets.all(20),
-                side: const BorderSide(color: AppTheme.primaryColor),
-                foregroundColor: AppTheme.primaryColor,
+                side: const BorderSide(color: S256Colors.primary),
+                foregroundColor: S256Colors.primary,
                 minimumSize: const Size(double.infinity, 60),
               ),
             ),
@@ -272,8 +279,8 @@ import '../widgets/rpc_endpoint_dialog.dart';
         label: const Text('Generate New Private Key'),
         style: OutlinedButton.styleFrom(
           padding: const EdgeInsets.all(20),
-          side: const BorderSide(color: AppTheme.primaryColor),
-          foregroundColor: AppTheme.primaryColor,
+          side: const BorderSide(color: S256Colors.primary),
+          foregroundColor: S256Colors.primary,
           minimumSize: const Size(double.infinity, 60),
         ),
       );
@@ -285,26 +292,25 @@ import '../widgets/rpc_endpoint_dialog.dart';
       
       return Column(
         children: [
-          const Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 64),
-          const SizedBox(height: 16),
+          const Icon(Icons.warning_amber_rounded, color: S256Colors.primary, size: 56),
+          const SizedBox(height: 12),
+          const HudLabel('Write it down now'),
+          const SizedBox(height: 8),
           const Text(
             'BACKUP YOUR KEYS',
-            style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.orange),
+            style: TextStyle(fontFamily: S256Theme.display, fontSize: 26, fontWeight: FontWeight.w700, letterSpacing: 1.5, color: S256Colors.text),
           ),
           const SizedBox(height: 8),
           const Text(
             'Write down these words/key and store them safely. If you lose them, your funds are gone forever.',
             textAlign: TextAlign.center,
-            style: TextStyle(color: Colors.white70),
+            style: TextStyle(color: S256Colors.textLight),
           ),
-          const SizedBox(height: 32),
-          Container(
+          const SizedBox(height: 28),
+          HudCard(
+            brackets: true,
             padding: const EdgeInsets.all(24),
-            decoration: BoxDecoration(
-              color: Colors.black.withValues(alpha: 0.3),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: Colors.orange.withValues(alpha: 0.3)),
-            ),
+            borderColor: S256Colors.lineStrong,
             child: Column(
               children: [
                 if (widget.useSeed)
@@ -314,15 +320,29 @@ import '../widgets/rpc_endpoint_dialog.dart';
                     alignment: WrapAlignment.center,
                     children: data!.split(' ').asMap().entries.map((entry) {
                       return Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        width: 140,
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                         decoration: BoxDecoration(
-                          color: AppTheme.surfaceColor,
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: Colors.white10),
+                          color: S256Colors.darkBg,
+                          borderRadius: S256Theme.borderRadius,
+                          border: Border.all(color: S256Colors.line),
                         ),
-                        child: Text(
-                          '${entry.key + 1}. ${entry.value}',
-                          style: const TextStyle(fontWeight: FontWeight.bold, fontFamily: 'monospace'),
+                        child: Row(
+                          children: [
+                            SizedBox(
+                              width: 26,
+                              child: Text(
+                                (entry.key + 1).toString().padLeft(2, '0'),
+                                style: const TextStyle(fontFamily: S256Theme.mono, fontSize: 12, color: S256Colors.primary),
+                              ),
+                            ),
+                            Expanded(
+                              child: Text(
+                                entry.value,
+                                style: const TextStyle(fontFamily: S256Theme.mono, fontWeight: FontWeight.w500, color: S256Colors.text),
+                              ),
+                            ),
+                          ],
                         ),
                       );
                     }).toList(),
@@ -330,7 +350,7 @@ import '../widgets/rpc_endpoint_dialog.dart';
                 else
                   SelectableText(
                     data!,
-                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, fontFamily: 'monospace'),
+                    style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w500, fontFamily: S256Theme.mono),
                     textAlign: TextAlign.center,
                   ),
                 const SizedBox(height: 24),
@@ -361,11 +381,10 @@ import '../widgets/rpc_endpoint_dialog.dart';
                 ? null 
                 : ((widget.useSeed && !_hasConfirmedBackup) ? null : _handleFinalize),
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.green,
               minimumSize: const Size(double.infinity, 60),
             ),
             child: provider.isLoading
-                ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: S256Colors.onPrimary, strokeWidth: 2))
                 : const Text('I\'M READY, LET\'S GO'),
           ),
         ],

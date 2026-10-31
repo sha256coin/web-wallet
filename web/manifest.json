@@ -4,8 +4,8 @@
     "description": "Simple, secure, decentralized SHA256COIN web-wallet",
     "start_url": "./",
     "display": "standalone",
-    "background_color": "#0A0A0A",
-    "theme_color": "#C0C0C0",
+    "background_color": "#0c0e11",
+    "theme_color": "#f5a524",
     "orientation": "portrait-primary",
     "icons": [
         {

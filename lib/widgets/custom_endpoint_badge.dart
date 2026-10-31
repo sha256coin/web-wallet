@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../theme/s256_theme.dart';
 import 'package:provider/provider.dart';
 import '../providers/wallet_provider.dart';
 import 'rpc_endpoint_dialog.dart';
@@ -16,25 +17,25 @@ class CustomEndpointBadge extends StatelessWidget {
       message: 'Using a custom server (${provider.rpcHostLabel}). Tap to change.',
       child: InkWell(
         onTap: () => showRpcEndpointDialog(context),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: S256Theme.borderRadius,
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
           decoration: BoxDecoration(
-            color: Colors.orange.withValues(alpha: 0.15),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Colors.orange.withValues(alpha: 0.6)),
+            color: S256Colors.primary.withValues(alpha: 0.15),
+            borderRadius: S256Theme.borderRadius,
+            border: Border.all(color: S256Colors.primary.withValues(alpha: 0.6)),
           ),
           child: const Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.dns_rounded, size: 12, color: Colors.orangeAccent),
+              Icon(Icons.dns_rounded, size: 12, color: S256Colors.primary),
               SizedBox(width: 4),
               Text(
                 'Custom server',
                 style: TextStyle(
                   fontSize: 11,
                   fontWeight: FontWeight.w600,
-                  color: Colors.orangeAccent,
+                  color: S256Colors.primary,
                 ),
               ),
             ],

@@ -7,7 +7,8 @@ import 'package:web/web.dart' as web;
 
 import '../providers/address_book_provider.dart';
 import '../services/address_book.dart';
-import '../theme/app_theme.dart';
+import '../theme/s256_theme.dart';
+import 'hud.dart';
 
 // Real exports are a few hundred KB at the 5000-contact import limit.
 const int _maxImportFileBytes = 2 * 1024 * 1024;
@@ -82,7 +83,7 @@ class _AddressBookPanelState extends State<AddressBookPanel> {
           TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            style: TextButton.styleFrom(foregroundColor: Colors.redAccent),
+            style: TextButton.styleFrom(foregroundColor: S256Colors.danger),
             child: const Text('Delete'),
           ),
         ],
@@ -157,7 +158,7 @@ class _AddressBookPanelState extends State<AddressBookPanel> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
-        backgroundColor: isError ? Colors.red.shade800 : null,
+        backgroundColor: isError ? S256Colors.dangerBg : null,
         duration: const Duration(seconds: 3),
       ),
     );
@@ -182,7 +183,7 @@ class _AddressBookPanelState extends State<AddressBookPanel> {
                 spacing: 12,
                 runSpacing: 8,
                 children: [
-                  const Text('Address Book', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+                  const HudLabel('Address book'),
                   Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
@@ -203,7 +204,7 @@ class _AddressBookPanelState extends State<AddressBookPanel> {
               const SizedBox(height: 4),
               const Text(
                 'Saved in this browser only. Import and export use .s256 files, the same format as the Android wallet.',
-                style: TextStyle(color: Colors.white54, fontSize: 13),
+                style: TextStyle(color: S256Colors.textLight, fontSize: 13),
               ),
               const SizedBox(height: 24),
               _buildForm(),
@@ -262,12 +263,12 @@ class _AddressBookPanelState extends State<AddressBookPanel> {
               controller: _addressController,
               onChanged: (_) => setState(() => _formError = null),
               onSubmitted: (_) => _save(),
-              style: const TextStyle(fontFamily: 'monospace'),
+              style: const TextStyle(fontFamily: S256Theme.mono),
               decoration: const InputDecoration(labelText: 'Address', hintText: 's21...'),
             ),
             if (_formError != null) ...[
               const SizedBox(height: 10),
-              Text(_formError!, style: const TextStyle(color: Colors.redAccent, fontSize: 13)),
+              Text(_formError!, style: const TextStyle(color: S256Colors.danger, fontSize: 13)),
             ],
             const SizedBox(height: 16),
             Row(
@@ -295,11 +296,11 @@ class _AddressBookPanelState extends State<AddressBookPanel> {
       margin: const EdgeInsets.only(bottom: 10),
       child: ListTile(
         contentPadding: const EdgeInsets.fromLTRB(16, 6, 8, 6),
-        leading: const Icon(Icons.person_rounded, color: AppTheme.primaryColor),
+        leading: const Icon(Icons.person_rounded, color: S256Colors.primary),
         title: Text(entry.label, style: const TextStyle(fontWeight: FontWeight.w600)),
         subtitle: Text(
           entry.address,
-          style: const TextStyle(fontFamily: 'monospace', fontSize: 12, color: Colors.white54),
+          style: const TextStyle(fontFamily: S256Theme.mono, fontSize: 12, color: S256Colors.textLight),
           overflow: TextOverflow.ellipsis,
         ),
         trailing:
@@ -332,7 +333,7 @@ class _AddressBookPanelState extends State<AddressBookPanel> {
           itemBuilder: (context) => const [
             PopupMenuItem(value: 'copy', child: Text('Copy address')),
             PopupMenuItem(value: 'edit', child: Text('Edit')),
-            PopupMenuItem(value: 'delete', child: Text('Delete', style: TextStyle(color: Colors.redAccent))),
+            PopupMenuItem(value: 'delete', child: Text('Delete', style: TextStyle(color: S256Colors.danger))),
           ],
         ),
       ],
@@ -359,7 +360,7 @@ class _AddressBookPanelState extends State<AddressBookPanel> {
           onPressed: () => _startEdit(entry),
         ),
         IconButton(
-          icon: const Icon(Icons.delete_outline_rounded, size: 20, color: Colors.redAccent),
+          icon: const Icon(Icons.delete_outline_rounded, size: 20, color: S256Colors.danger),
           tooltip: 'Delete',
           onPressed: () => _confirmDelete(entry),
         ),
@@ -384,7 +385,7 @@ class _EmptyNote extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 24),
-      child: Text(text, textAlign: TextAlign.center, style: const TextStyle(color: Colors.white54)),
+      child: Text(text, textAlign: TextAlign.center, style: const TextStyle(color: S256Colors.textLight)),
     );
   }
 }
@@ -419,7 +420,7 @@ class _AddressBookPickerState extends State<_AddressBookPicker> {
         child: all.isEmpty
             ? const Text(
                 'Your address book is empty. Add contacts in the Contacts tab.',
-                style: TextStyle(color: Colors.white70),
+                style: TextStyle(color: S256Colors.textLight),
               )
             : Column(
                 mainAxisSize: MainAxisSize.min,
@@ -443,14 +444,14 @@ class _AddressBookPickerState extends State<_AddressBookPicker> {
                             itemBuilder: (context, index) {
                               final entry = entries[index];
                               return ListTile(
-                                leading: const Icon(Icons.person_rounded, color: AppTheme.primaryColor),
+                                leading: const Icon(Icons.person_rounded, color: S256Colors.primary),
                                 title: Text(entry.label),
                                 subtitle: Text(
                                   entry.address,
-                                  style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
+                                  style: const TextStyle(fontFamily: S256Theme.mono, fontSize: 12),
                                   overflow: TextOverflow.ellipsis,
                                 ),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                shape: RoundedRectangleBorder(borderRadius: S256Theme.borderRadius),
                                 onTap: () => Navigator.pop(context, entry),
                               );
                             },

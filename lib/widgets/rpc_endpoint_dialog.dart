@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../theme/s256_theme.dart';
 import 'package:provider/provider.dart';
 import '../config.dart';
 import '../providers/wallet_provider.dart';
@@ -88,7 +89,7 @@ class _RpcEndpointDialogState extends State<RpcEndpointDialog> {
               Row(
                 children: [
                   Icon(Icons.circle,
-                      size: 8, color: custom ? Colors.orangeAccent : Colors.green),
+                      size: 8, color: custom ? S256Colors.primary : S256Colors.success),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
@@ -118,9 +119,9 @@ class _RpcEndpointDialogState extends State<RpcEndpointDialog> {
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: Colors.orange.withValues(alpha: 0.10),
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: Colors.orange.withValues(alpha: 0.4)),
+                  color: S256Colors.primary.withValues(alpha: 0.10),
+                  borderRadius: S256Theme.borderRadius,
+                  border: Border.all(color: S256Colors.primary.withValues(alpha: 0.4)),
                 ),
                 child: const Text(
                   'A custom endpoint cannot access your keys, but an untrusted '
@@ -132,7 +133,7 @@ class _RpcEndpointDialogState extends State<RpcEndpointDialog> {
               const SizedBox(height: 8),
               const Text(
                 'The server can see the addresses you look up, but never your keys.',
-                style: TextStyle(fontSize: 12, color: Colors.white54),
+                style: TextStyle(fontSize: 12, color: S256Colors.textLight),
               ),
               if (checking) ...[
                 const SizedBox(height: 14),
@@ -152,7 +153,7 @@ class _RpcEndpointDialogState extends State<RpcEndpointDialog> {
                 const SizedBox(height: 14),
                 Text(
                   _error!,
-                  style: const TextStyle(color: Colors.redAccent, fontSize: 13),
+                  style: const TextStyle(color: S256Colors.danger, fontSize: 13),
                 ),
               ],
             ],

@@ -4,9 +4,22 @@ All notable changes to this project are documented in this file.
 
 The format is inspired by Keep a Changelog and this project follows semantic versioning for release tags.
 
-## [Unreleased]
+## [3.0.0] - 2026-10-31
+
+A new look that matches sha256coin.eu, the explorer and the Android wallet ("Digital Platinum"), and the price from the explorer. Dark theme only. Nothing in how keys, addresses or transactions are handled has changed.
 
 ### Changed
+
+- New design: graphite background with the website's faint blueprint grid and amber glow, flat square cards with thin borders, and one amber accent from the coin logo instead of purple and cyan. Colours and the Material theme come from one place (`S256Colors` and `S256Theme` in `lib/theme/s256_theme.dart`), the same tokens as the Android wallet.
+- Fonts of the website, bundled with the app so nothing is loaded from Google: Chakra Petch for titles and numbers, IBM Plex Sans for text, IBM Plex Mono for addresses, keys, amounts and labels (OFL licences in `assets/fonts`).
+- Start screen: the title in brushed platinum with a slow moving sheen, and the coin inside a slowly turning dashed ring, like the website's front page.
+- Desktop: a side menu with numbered items and an amber marker on the open tab, the wallet version, support addresses and Logout. Phones keep the bottom bar, now with an amber line over the open tab.
+- A status line along the top of the wallet: connection, block height, network hashrate, peers, S256 price and the server in use (click it to change the server). It reads the node every two minutes.
+- The balance card has amber corner brackets, the balance in large platinum figures with its USD value under it, the price in its own panel, and the balance chart in amber. Send is the amber button, Receive the outlined one.
+- Every dialog has the same corner-bracket frame. The recovery words are shown numbered in a grid.
+- Section titles are small mono labels ("// TRANSACTION HISTORY"); the name of the open tab is shown at the top.
+- The receive QR code stays on pure white so every scanner reads it.
+- The loading screen before the app starts uses the same colours and grid.
 
 - The S256 price comes from the explorer (`explorer.sha256coin.eu/api/price`), the same source as the Android wallet, instead of calling LiveCoinWatch from the browser. The LiveCoinWatch API key is no longer built into the app (`LIVECOINWATCH_API_KEY` is gone from `dart_defines.json`).
 - While no market trades S256, the price box shows the last traded price with "last traded <date>" under it, and its tooltip says it is not a live price.

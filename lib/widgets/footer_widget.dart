@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
-import '../theme/app_theme.dart';
+import '../theme/s256_theme.dart';
+import 'hud.dart';
 
 const String s256DisclaimerTitle = 'Disclaimer: ';
 const String s256DisclaimerSummaryText =
@@ -30,9 +31,9 @@ class FooterWidget extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 24),
       decoration: BoxDecoration(
-        color: Colors.black.withValues(alpha: 0.2),
+        color: S256Colors.darkBg,
         border: const Border(
-          top: BorderSide(color: Colors.white10, width: 1),
+          top: BorderSide(color: S256Colors.line, width: 1),
         ),
       ),
       child: Center(
@@ -89,7 +90,7 @@ class FooterWidget extends StatelessWidget {
                 },
               ),
               const SizedBox(height: 10),
-              const Divider(color: Colors.white10),
+              const Divider(color: S256Colors.line),
               const SizedBox(height: 10),
               _buildBottomSection(),
               const SizedBox(height: 18),
@@ -108,41 +109,28 @@ class FooterWidget extends StatelessWidget {
         Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const FaIcon(FontAwesomeIcons.coins, color: AppTheme.accentColor, size: 28),
+            Image.asset('assets/logo.png', width: 36, height: 36),
             const SizedBox(width: 12),
-            ShaderMask(
-              shaderCallback: (bounds) => const LinearGradient(
-                colors: [AppTheme.primaryColor, AppTheme.accentColor],
-              ).createShader(bounds),
-              child: const Text(
-                'S256',
-                style: TextStyle(
-                  fontSize: 42,
-                  fontWeight: FontWeight.w900,
-                  color: Colors.white,
-                  letterSpacing: 1,
-                ),
+            const PlatinumText(
+              'S256',
+              style: TextStyle(
+                fontFamily: S256Theme.display,
+                fontSize: 40,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 1,
               ),
             ),
           ],
         ),
         const SizedBox(height: 4),
-        const Text(
-          'Digital Platinum',
-          style: TextStyle(
-            color: Colors.white70,
-            fontSize: 24,
-            fontWeight: FontWeight.w800,
-            letterSpacing: 1.9,
-          ),
-        ),
+        const HudLabel('Digital Platinum', slashes: false),
+        const SizedBox(height: 8),
         const Text(
           'A secure, decentralized cryptocurrency built on the SHA-256 algorithm,\ndesigned for long-term value and stability.',
           style: TextStyle(
-            color: Colors.white,
-            fontSize: 12,
-            fontWeight: FontWeight.w500,
-            letterSpacing: 0.5,
+            color: S256Colors.textLight,
+            fontSize: 13,
+            height: 1.5,
           ),
         ),
         const SizedBox(height: 24),
@@ -161,13 +149,14 @@ class FooterWidget extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            FaIcon(icon, color: AppTheme.accentColor.withValues(alpha: 0.7), size: 14),
+            FaIcon(icon, color: S256Colors.primary, size: 14),
             const SizedBox(width: 10),
             Text(
               email,
-              style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.5),
-                fontSize: 14,
+              style: const TextStyle(
+                color: S256Colors.textLight,
+                fontFamily: S256Theme.mono,
+                fontSize: 13,
               ),
             ),
           ],
@@ -209,16 +198,9 @@ class FooterWidget extends StatelessWidget {
         Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const FaIcon(FontAwesomeIcons.networkWired, color: AppTheme.accentColor, size: 18),
-            const SizedBox(width: 12),
-            const Text(
-              'Network',
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
-              ),
-            ),
+            const FaIcon(FontAwesomeIcons.networkWired, color: S256Colors.primary, size: 14),
+            const SizedBox(width: 10),
+            const HudLabel('Network', slashes: false, color: S256Colors.text),
           ],
         ),
         const SizedBox(height: 24),
@@ -239,11 +221,11 @@ class FooterWidget extends StatelessWidget {
             width: 110,
             child: Row(
               children: [
-                FaIcon(icon, color: Colors.white38, size: 14),
+                FaIcon(icon, color: S256Colors.textLight, size: 13),
                 const SizedBox(width: 10),
                 Text(
                   label,
-                  style: const TextStyle(color: Colors.white38, fontSize: 14),
+                  style: const TextStyle(color: S256Colors.textLight, fontSize: 14),
                 ),
               ],
             ),
@@ -251,9 +233,10 @@ class FooterWidget extends StatelessWidget {
           Text(
             value,
             style: const TextStyle(
-              color: Colors.white,
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
+              color: S256Colors.text,
+              fontFamily: S256Theme.mono,
+              fontSize: 13,
+              fontWeight: FontWeight.w500,
             ),
           ),
         ],
@@ -272,16 +255,9 @@ class FooterWidget extends StatelessWidget {
         Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            FaIcon(icon, color: AppTheme.accentColor, size: 18),
-            const SizedBox(width: 12),
-            Text(
-              title,
-              style: const TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
-              ),
-            ),
+            FaIcon(icon, color: S256Colors.primary, size: 14),
+            const SizedBox(width: 10),
+            HudLabel(title, slashes: false, color: S256Colors.text),
           ],
         ),
         const SizedBox(height: 24),
@@ -294,12 +270,12 @@ class FooterWidget extends StatelessWidget {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  FaIcon(link.icon, color: Colors.white.withValues(alpha: 0.4), size: 16),
+                  FaIcon(link.icon, color: S256Colors.textLight, size: 15),
                   const SizedBox(width: 12),
                   Text(
                     link.name,
-                    style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.6),
+                    style: const TextStyle(
+                      color: S256Colors.text,
                       fontSize: 15,
                     ),
                   ),
@@ -319,8 +295,8 @@ class FooterWidget extends StatelessWidget {
         
         final copyright = Text(
           '© 2026 S256 — Open source cryptocurrency.',
-          style: TextStyle(
-            color: Colors.white.withValues(alpha: 0.3),
+          style: const TextStyle(
+            color: S256Colors.textLight,
             fontSize: 13,
           ),
         );
@@ -328,21 +304,21 @@ class FooterWidget extends StatelessWidget {
         final origin = Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const FaIcon(FontAwesomeIcons.bolt, color: Colors.amber, size: 12),
+            const FaIcon(FontAwesomeIcons.bolt, color: S256Colors.primary, size: 12),
             const SizedBox(width: 8),
-            Text(
+            const Text(
               'Hosted in ',
-              style: TextStyle(color: Colors.white.withValues(alpha: 0.3), fontSize: 13),
+              style: TextStyle(color: S256Colors.textLight, fontSize: 13),
             ),
-            const FaIcon(FontAwesomeIcons.locationDot, color: Colors.redAccent, size: 12),
+            const FaIcon(FontAwesomeIcons.locationDot, color: S256Colors.danger, size: 12),
             const SizedBox(width: 6),
             _OriginLink(
               label: 'Romania',
               onTap: () => _launchUrl('https://discoveromania.ro/'),
             ),
-            Text(
+            const Text(
               ' 🇷🇴',
-              style: TextStyle(color: Colors.white.withValues(alpha: 0.3), fontSize: 13),
+              style: TextStyle(color: S256Colors.textLight, fontSize: 13),
             ),
           ],
         );
@@ -388,22 +364,22 @@ class FooterWidget extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.03),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+        color: S256Colors.cardBg,
+        borderRadius: S256Theme.borderRadius,
+        border: Border.all(color: S256Colors.line),
       ),
       child: RichText(
         text: TextSpan(
-          style: TextStyle(
-            color: Colors.white.withValues(alpha: 0.5),
+          style: const TextStyle(
+            color: S256Colors.textLight,
+            fontFamily: S256Theme.body,
             fontSize: 12,
             height: 1.5,
-            fontStyle: FontStyle.italic,
           ),
           children: const [
             TextSpan(
               text: s256DisclaimerTitle,
-              style: TextStyle(fontWeight: FontWeight.w700, fontStyle: FontStyle.normal),
+              style: TextStyle(fontWeight: FontWeight.w600, color: S256Colors.text),
             ),
             TextSpan(
               text: s256DisclaimerText,
@@ -422,12 +398,12 @@ class FooterWidget extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            FaIcon(icon, color: Colors.white.withValues(alpha: 0.2), size: 12),
+            FaIcon(icon, color: S256Colors.textLight, size: 12),
             const SizedBox(width: 8),
             Text(
               label,
-              style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.3),
+              style: const TextStyle(
+                color: S256Colors.textLight,
                 fontSize: 13,
               ),
             ),
@@ -470,11 +446,11 @@ class _OriginLinkState extends State<_OriginLink> {
         child: Text(
           widget.label,
           style: TextStyle(
-            color: const Color(0xFFFFBF55),
+            color: S256Colors.accent,
             fontSize: 13,
             fontWeight: FontWeight.w500,
             decoration: _hover ? TextDecoration.underline : TextDecoration.none,
-            decorationColor: const Color(0xFFFFBF55),
+            decorationColor: S256Colors.accent,
           ),
         ),
       ),

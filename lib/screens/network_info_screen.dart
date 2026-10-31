@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../providers/wallet_provider.dart';
-import '../theme/app_theme.dart';
+import '../widgets/status_strip.dart';
+import '../theme/s256_theme.dart';
 
   class NetworkInfoScreen extends StatefulWidget {
     const NetworkInfoScreen({super.key});
@@ -58,7 +59,7 @@ import '../theme/app_theme.dart';
                       _buildInfoCard([
                         _buildInfoRow('Blocks', _info!['blocks'].toString()),
                         _buildInfoRow('Difficulty', _formatDifficulty(_info!['difficulty'])),
-                        _buildInfoRow('Network Hashrate', _formatHashrate(_info!['networkhashps'])),
+                        _buildInfoRow('Network Hashrate', formatHashrate(_info!['networkhashps'])),
                         _buildInfoRow('Median Time', _formatTime(_info!['mediantime'])),
                       ]),
                       const SizedBox(height: 32),
@@ -85,7 +86,7 @@ import '../theme/app_theme.dart';
         child: Text(
           title.toUpperCase(),
           style: const TextStyle(
-            color: AppTheme.accentColor,
+            color: S256Colors.primary,
             fontWeight: FontWeight.bold,
             letterSpacing: 1.2,
             fontSize: 14,
@@ -111,11 +112,11 @@ import '../theme/app_theme.dart';
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(label, style: const TextStyle(color: Colors.white70)),
+            Text(label, style: const TextStyle(color: S256Colors.textLight)),
             Flexible(
               child: Text(
                 value,
-                style: const TextStyle(fontWeight: FontWeight.bold, fontFamily: 'monospace'),
+                style: const TextStyle(fontWeight: FontWeight.w500, fontFamily: S256Theme.mono),
                 textAlign: TextAlign.right,
               ),
             ),
@@ -132,18 +133,6 @@ import '../theme/app_theme.dart';
       if (d >= 1e6) return '${(d / 1e6).toStringAsFixed(2)} M';
       if (d >= 1e3) return '${(d / 1e3).toStringAsFixed(2)} K';
       return d.toStringAsFixed(2);
-    }
-
-    String _formatHashrate(dynamic hashrate) {
-      if (hashrate == null) return 'N/A';
-      double rate = (hashrate as num).toDouble();
-      if (rate > 1e18) return '${(rate / 1e18).toStringAsFixed(2)} EH/s';
-      if (rate > 1e15) return '${(rate / 1e15).toStringAsFixed(2)} PH/s';
-      if (rate > 1e12) return '${(rate / 1e12).toStringAsFixed(2)} TH/s';
-      if (rate > 1e9) return '${(rate / 1e9).toStringAsFixed(2)} GH/s';
-      if (rate > 1e6) return '${(rate / 1e6).toStringAsFixed(2)} MH/s';
-      if (rate > 1e3) return '${(rate / 1e3).toStringAsFixed(2)} KH/s';
-      return '${rate.toStringAsFixed(2)} H/s';
     }
 
     String _formatTime(dynamic timestamp) {

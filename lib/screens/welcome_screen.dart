@@ -3,7 +3,8 @@ import '../config.dart';
 import 'package:provider/provider.dart';
 import 'setup_screen.dart';
 import '../services/payment_link_inbox.dart';
-import '../theme/app_theme.dart';
+import '../theme/s256_theme.dart';
+import '../widgets/hud.dart';
 import '../widgets/custom_endpoint_badge.dart';
 import '../widgets/footer_widget.dart';
 import '../widgets/rpc_endpoint_dialog.dart';
@@ -26,23 +27,19 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
   }
 
   Widget _buildPaymentRequestWaiting() {
-    return Container(
-      constraints: const BoxConstraints(maxWidth: 600),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppTheme.primaryColor.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppTheme.primaryColor.withValues(alpha: 0.3)),
-      ),
-      child: const Row(
+    return const HudCard(
+      brackets: true,
+      padding: EdgeInsets.all(16),
+      borderColor: S256Colors.lineStrong,
+      child: Row(
         children: [
-          Icon(Icons.request_quote_rounded, color: AppTheme.primaryColor),
+          Icon(Icons.request_quote_rounded, color: S256Colors.primary),
           SizedBox(width: 12),
           Expanded(
             child: Text(
               'A payment request is waiting. Open your wallet to review it on the Send tab. '
               'Nothing is sent without your confirmation.',
-              style: TextStyle(color: Colors.white70),
+              style: TextStyle(color: S256Colors.text),
             ),
           ),
         ],
@@ -71,85 +68,67 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
     final canProceed = !_agreementGateEnabled || _hasAgreed;
 
     return Scaffold(
-      body: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [
-              AppTheme.backgroundColor,
-              AppTheme.surfaceColor,
-              AppTheme.backgroundColor,
-            ],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-        ),
+      body: GridBackground(
         child: SingleChildScrollView(
           child: Column(
             children: [
-              // Main Content
               Padding(
-                padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 24),
+                padding: const EdgeInsets.fromLTRB(20, 40, 20, 24),
                 child: Center(
                   child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 1200),
+                    constraints: const BoxConstraints(maxWidth: 1100),
                     child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Hero(
-                          tag: 'logo',
-                          child: Image.asset('assets/logo.png', height: 120),
-                        ),
-                        const SizedBox(height: 24),
-                        const Text(
-                          'SHA256 COIN',
-                          style: TextStyle(
-                            fontSize: 48,
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: 4,
-                            color: Colors.white,
-                          ),
-                        ),
-                        const Text(
-                          'SECURE WEB WALLET',
-                          style: TextStyle(
-                            fontSize: 18,
-                            color: AppTheme.accentColor,
-                            fontWeight: FontWeight.bold,
-                            letterSpacing: 2,
+                        _buildHero(),
+                        const SizedBox(height: 40),
+                        ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 560),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              if (context.watch<PaymentLinkInbox>().hasPending) ...[
+                                _buildPaymentRequestWaiting(),
+                                const SizedBox(height: 16),
+                              ],
+                              if (_agreementGateEnabled) ...[
+                                _buildDisclaimerSection(),
+                                const SizedBox(height: 24),
+                              ],
+                              const HudLabel('Open a wallet'),
+                              const SizedBox(height: 12),
+                              _buildOptionCard(
+                                context,
+                                title: 'Seed Phrase Wallet',
+                                description: 'Recommended. Modern 12 or 24-word recovery phrase. Secure and easy to backup.',
+                                icon: Icons.vpn_key_rounded,
+                                tag: 'BIP39',
+                                enabled: canProceed,
+                                onTap: () => _openSetup(true),
+                              ),
+                              const SizedBox(height: 12),
+                              _buildOptionCard(
+                                context,
+                                title: 'Legacy WIF Wallet',
+                                description: 'Load an existing wallet using a raw Private Key (WIF).',
+                                icon: Icons.account_balance_wallet_rounded,
+                                tag: 'WIF',
+                                enabled: canProceed,
+                                onTap: () => _openSetup(false),
+                              ),
+                            ],
                           ),
                         ),
                         const SizedBox(height: 20),
-                        if (context.watch<PaymentLinkInbox>().hasPending) ...[
-                          _buildPaymentRequestWaiting(),
-                          const SizedBox(height: 20),
-                        ],
-                        if (_agreementGateEnabled) ...[
-                          _buildDisclaimerSection(),
-                          const SizedBox(height: 20),
-                        ],
-                        _buildOptionCard(
-                          context,
-                          title: 'Seed Phrase Wallet',
-                          description: 'Recommended. Modern 12 or 24-word recovery phrase. Secure and easy to backup.',
-                          icon: Icons.vpn_key_rounded,
-                          color: AppTheme.primaryColor,
-                          enabled: canProceed,
-                          onTap: () => _openSetup(true),
-                        ),
-                        const SizedBox(height: 20),
-                        _buildOptionCard(
-                          context,
-                          title: 'Legacy WIF Wallet',
-                          description: 'Load an existing wallet using a raw Private Key (WIF).',
-                          icon: Icons.account_balance_wallet_rounded,
-                          color: AppTheme.secondaryColor,
-                          enabled: canProceed,
-                          onTap: () => _openSetup(false),
-                        ),
-                        const SizedBox(height: 10),
-                        const Text(
-                          'Your keys never leave your browser.',
-                          style: TextStyle(color: Colors.white38, fontSize: 14),
+                        const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.lock_outline_rounded, size: 14, color: S256Colors.textLight),
+                            SizedBox(width: 6),
+                            Text(
+                              'Your keys never leave your browser.',
+                              style: TextStyle(color: S256Colors.textLight, fontSize: 14),
+                            ),
+                          ],
                         ),
                         const SizedBox(height: 6),
                         Wrap(
@@ -161,25 +140,28 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                               onPressed: () => showRpcEndpointDialog(context),
                               icon: const Icon(Icons.dns_rounded, size: 16),
                               label: const Text('Server connection'),
-                              style: TextButton.styleFrom(foregroundColor: Colors.white54),
+                              style: TextButton.styleFrom(foregroundColor: S256Colors.textLight),
                             ),
                             const CustomEndpointBadge(),
                           ],
                         ),
                         const SizedBox(height: 4),
-                        const Padding(
-                                padding: EdgeInsets.symmetric(horizontal: 16),
-                                child: Text('S256 Web-Wallet version ${Config.appVersion} - Powered by SHA256 Coin Core', 
-                                style: TextStyle(color: Colors.white54, fontSize: 12),
-                                textAlign: TextAlign.center
-                          ),      
+                        const Text(
+                          'S256 WEB WALLET v${Config.appVersion} · POWERED BY SHA256 COIN CORE',
+                          style: TextStyle(
+                            color: S256Colors.textLight,
+                            fontSize: 11,
+                            fontFamily: S256Theme.mono,
+                            letterSpacing: 1.2,
+                          ),
+                          textAlign: TextAlign.center,
                         ),
                       ],
                     ),
                   ),
                 ),
               ),
-              
+
               // Footer
               const FooterWidget(),
             ],
@@ -189,75 +171,135 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
     );
   }
 
+  /// Title and coin side by side on a wide screen, stacked on a phone.
+  Widget _buildHero() {
+    return LayoutBuilder(builder: (context, constraints) {
+      final wide = constraints.maxWidth >= 760;
+      final copy = Column(
+        crossAxisAlignment: wide ? CrossAxisAlignment.start : CrossAxisAlignment.center,
+        children: [
+          const HudLabel('Self-custodial web wallet'),
+          const SizedBox(height: 16),
+          PlatinumText(
+            'SHA256 COIN',
+            textAlign: wide ? TextAlign.start : TextAlign.center,
+            style: TextStyle(
+              fontFamily: S256Theme.display,
+              fontSize: wide ? 64 : 42,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 1.5,
+              height: 1,
+            ),
+          ),
+          const SizedBox(height: 14),
+          const Text(
+            'Secure Web Wallet',
+            style: TextStyle(
+              fontFamily: S256Theme.display,
+              fontSize: 22,
+              fontWeight: FontWeight.w500,
+              color: S256Colors.text,
+            ),
+          ),
+          const SizedBox(height: 10),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 460),
+            child: Text(
+              'Send and receive S256 from your browser. Keys are made and kept on this device, '
+              'and transactions are signed here before they are sent.',
+              textAlign: wide ? TextAlign.start : TextAlign.center,
+              style: const TextStyle(color: S256Colors.textLight, fontSize: 15, height: 1.6),
+            ),
+          ),
+        ],
+      );
+      const coin = Hero(tag: 'logo', child: CoinStage(size: 190));
+      if (!wide) {
+        return Column(children: [coin, const SizedBox(height: 28), copy]);
+      }
+      return Row(
+        children: [
+          Expanded(flex: 11, child: copy),
+          const SizedBox(width: 48),
+          const Expanded(flex: 9, child: Center(child: coin)),
+        ],
+      );
+    });
+  }
+
   Widget _buildOptionCard(
     BuildContext context, {
     required String title,
     required String description,
     required IconData icon,
-    required Color color,
+    required String tag,
     required bool enabled,
     required VoidCallback onTap,
   }) {
-    return MouseRegion(
-      cursor: enabled ? SystemMouseCursors.click : SystemMouseCursors.forbidden,
-      child: GestureDetector(
-        onTap: enabled ? onTap : null,
-        child: Container(
-          width: 500,
-          padding: const EdgeInsets.all(24),
-          decoration: BoxDecoration(
-            color: enabled
-                ? AppTheme.surfaceColor.withValues(alpha: 0.5)
-                : AppTheme.surfaceColor.withValues(alpha: 0.28),
-            borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: color.withValues(alpha: 0.3), width: 1),
-            boxShadow: [
-              BoxShadow(
-                color: color.withValues(alpha: 0.1),
-                blurRadius: 20,
-                offset: const Offset(0, 10),
-              ),
-            ],
-          ),
-          child: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.1),
-                  shape: BoxShape.circle,
+    return Opacity(
+      opacity: enabled ? 1 : 0.55,
+      child: Material(
+        color: S256Colors.cardBg,
+        shape: const RoundedRectangleBorder(
+          borderRadius: S256Theme.borderRadius,
+          side: BorderSide(color: S256Colors.lineStrong),
+        ),
+        child: InkWell(
+          onTap: enabled ? onTap : null,
+          mouseCursor: enabled ? SystemMouseCursors.click : SystemMouseCursors.forbidden,
+          hoverColor: S256Colors.glow,
+          borderRadius: S256Theme.borderRadius,
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Row(
+              children: [
+                Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    color: S256Colors.glow,
+                    borderRadius: S256Theme.borderRadius,
+                    border: Border.all(color: S256Colors.primary.withValues(alpha: 0.4)),
+                  ),
+                  child: Icon(icon, color: S256Colors.primary, size: 24),
                 ),
-                child: Icon(icon, color: color, size: 32),
-              ),
-              const SizedBox(width: 20),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: const TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
+                const SizedBox(width: 18),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Flexible(
+                            child: Text(
+                              title,
+                              style: const TextStyle(
+                                fontFamily: S256Theme.display,
+                                fontSize: 18,
+                                fontWeight: FontWeight.w600,
+                                color: S256Colors.text,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          HudLabel(tag, slashes: false, color: S256Colors.textLight),
+                        ],
                       ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      description,
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: Colors.white.withValues(alpha: enabled ? 0.6 : 0.45),
+                      const SizedBox(height: 4),
+                      Text(
+                        description,
+                        style: const TextStyle(fontSize: 14, color: S256Colors.textLight, height: 1.4),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
-              Icon(
-                enabled ? Icons.chevron_right_rounded : Icons.lock_outline,
-                color: Colors.white24,
-              ),
-            ],
+                const SizedBox(width: 8),
+                Icon(
+                  enabled ? Icons.arrow_forward_rounded : Icons.lock_outline,
+                  color: enabled ? S256Colors.primary : S256Colors.textLight,
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -265,65 +307,55 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
   }
 
   Widget _buildDisclaimerSection() {
-    return Container(
-      width: 500,
+    return HudCard(
       padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: AppTheme.surfaceColor.withValues(alpha: 0.45),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: AppTheme.accentColor.withValues(alpha: 0.25),
-          width: 1,
-        ),
-      ),
+      borderColor: S256Colors.lineStrong,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          const HudLabel('Read first'),
+          const SizedBox(height: 8),
           const Text(
             s256DisclaimerTitle,
             style: TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.w800,
-              fontSize: 16,
+              fontFamily: S256Theme.display,
+              color: S256Colors.text,
+              fontWeight: FontWeight.w600,
+              fontSize: 17,
             ),
           ),
-          const SizedBox(height: 10),
-          Text(
+          const SizedBox(height: 8),
+          const Text(
             s256DisclaimerSummaryText,
-            style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.78),
-              fontSize: 13,
-              height: 1.45,
-            ),
+            style: TextStyle(color: S256Colors.textLight, fontSize: 13, height: 1.5),
           ),
           const SizedBox(height: 4),
           Material(
             type: MaterialType.transparency,
             child: Theme(
               data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-              child: ExpansionTile(
+              child: const ExpansionTile(
                 tilePadding: EdgeInsets.zero,
                 childrenPadding: EdgeInsets.zero,
-                iconColor: Colors.white54,
-                collapsedIconColor: Colors.white54,
+                iconColor: S256Colors.primary,
+                collapsedIconColor: S256Colors.textLight,
                 title: Text(
                   'Read full disclaimer text',
                   style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.74),
+                    color: S256Colors.text,
                     fontSize: 13,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
                 children: [
                   Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
+                    padding: EdgeInsets.only(bottom: 8),
                     child: Text(
                       s256DisclaimerText,
                       style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.65),
+                        color: S256Colors.textLight,
                         fontSize: 12,
-                        height: 1.45,
-                        fontStyle: FontStyle.italic,
+                        height: 1.5,
                       ),
                     ),
                   ),
@@ -331,57 +363,52 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
               ),
             ),
           ),
-          const SizedBox(height: 16),
-          Text(
+          const SizedBox(height: 12),
+          const Text(
             'Wallet Usage and Security Responsibility',
             style: TextStyle(
-              color: AppTheme.accentColor.withValues(alpha: 0.95),
-              fontSize: 14,
-              fontWeight: FontWeight.w700,
+              fontFamily: S256Theme.display,
+              color: S256Colors.primary,
+              fontSize: 15,
+              fontWeight: FontWeight.w600,
             ),
           ),
           const SizedBox(height: 8),
-          Text(
+          const Text(
             'This wallet is self-custodial. S256 Coin cannot recover lost credentials. Keep your seed phrase and WIF private key offline, confidential, and backed up in secure locations. Anyone with access to these credentials can irreversibly control your funds.',
-            style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.75),
-              fontSize: 13,
-              height: 1.45,
-            ),
+            style: TextStyle(color: S256Colors.textLight, fontSize: 13, height: 1.5),
           ),
           const SizedBox(height: 14),
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             decoration: BoxDecoration(
-              color: Colors.redAccent.withValues(alpha: 0.14),
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: Colors.redAccent.withValues(alpha: 0.35)),
+              color: S256Colors.danger.withValues(alpha: 0.08),
+              // No borderRadius: Flutter cannot round a border with one coloured side.
+              border: const Border(left: BorderSide(color: S256Colors.danger, width: 3)),
             ),
             child: const Text(
               'Critical: You are solely responsible for keeping your seed phrase and WIF secure.',
               style: TextStyle(
-                color: Colors.white,
+                color: S256Colors.text,
                 fontSize: 13,
-                fontWeight: FontWeight.w700,
+                fontWeight: FontWeight.w600,
               ),
             ),
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 10),
           Material(
             type: MaterialType.transparency,
             child: CheckboxListTile(
               contentPadding: EdgeInsets.zero,
               value: _hasAgreed,
               onChanged: _handleAgreementChanged,
-              activeColor: AppTheme.primaryColor,
-              checkColor: Colors.white,
               controlAffinity: ListTileControlAffinity.leading,
-              title: Text(
+              title: const Text(
                 'I have read and agree to the disclaimer and understand my responsibility to secure my seed phrase and WIF.',
                 style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.9),
+                  color: S256Colors.text,
                   fontSize: 13,
-                  fontWeight: FontWeight.w600,
+                  fontWeight: FontWeight.w500,
                 ),
               ),
             ),

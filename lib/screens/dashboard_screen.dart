@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import '../config.dart';
 import 'package:flutter/services.dart';
@@ -9,7 +8,7 @@ import 'package:qr_flutter/qr_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter/foundation.dart';
 import '../providers/wallet_provider.dart';
-import '../theme/app_theme.dart';
+import '../theme/s256_theme.dart';
 import '../models/wallet_model.dart';
 import '../models/transaction_model.dart';
 import '../services/address_book.dart';
@@ -19,6 +18,8 @@ import '../services/price_service.dart';
 import '../providers/address_book_provider.dart';
 import '../widgets/address_book_panel.dart';
 import '../widgets/custom_endpoint_badge.dart';
+import '../widgets/hud.dart';
+import '../widgets/status_strip.dart';
 import '../widgets/rpc_endpoint_dialog.dart';
 import 'network_info_screen.dart';
 
@@ -51,8 +52,8 @@ import 'network_info_screen.dart';
       });
 
       final linePaint = Paint()
-        ..color = Colors.white.withValues(alpha: 0.5)
-        ..strokeWidth = 1.8
+        ..color = S256Colors.primary
+        ..strokeWidth = 1.6
         ..style = PaintingStyle.stroke
         ..strokeCap = StrokeCap.round
         ..strokeJoin = StrokeJoin.round;
@@ -78,18 +79,15 @@ import 'network_info_screen.dart';
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
           colors: [
-            Colors.white.withValues(alpha: 0.18),
-            Colors.white.withValues(alpha: 0.0),
+            S256Colors.primary.withValues(alpha: 0.22),
+            S256Colors.primary.withValues(alpha: 0.0),
           ],
         ).createShader(Rect.fromLTWH(0, 0, size.width, size.height));
       canvas.drawPath(fillPath, fillPaint);
 
       // dot at the latest point
-      canvas.drawCircle(
-        offsets.last,
-        3,
-        Paint()..color = Colors.white.withValues(alpha: 0.8),
-      );
+      canvas.drawCircle(offsets.last, 7, Paint()..color = S256Colors.primary.withValues(alpha: 0.2));
+      canvas.drawCircle(offsets.last, 3, Paint()..color = S256Colors.primary);
     }
 
     @override
@@ -97,14 +95,13 @@ import 'network_info_screen.dart';
   }
 
 class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProviderStateMixin {
-  // Tab order, shared by the sidebar, the bottom bar and the TabBarView.
-  static const int _tabAssets = 0;
-  static const int _tabContacts = 1;
+  // Tab order, shared by the sidebar, the bottom bar and the TabBarView
+  // (see _tabs for the icons and names).
   static const int _tabSend = 2;
   static const int _tabReceive = 3;
-  static const int _tabSettings = 4;
 
   late TabController _tabController;
+  int _shownTab = 0;
   final TextEditingController _toController = TextEditingController();
   final TextEditingController _amountController = TextEditingController();
   final TextEditingController _messageController = TextEditingController();
@@ -134,6 +131,8 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
     _priceUpdateTimer = Timer.periodic(const Duration(minutes: 5), (_) => _fetchPrice());
     _amountController.addListener(() => setState(() {})); // triggers rebuild on type
     _tabController.addListener(() {
+      // The sidebar and the title follow the selected tab.
+      if (_tabController.index != _shownTab) setState(() => _shownTab = _tabController.index);
       if (_tabController.index == _tabSend) {
         final provider = context.read<WalletProvider>();
         provider.fetchFeeRate();
@@ -152,7 +151,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
     if (error != null) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text('Payment link not used: $error'),
-        backgroundColor: Colors.red.shade800,
+        backgroundColor: S256Colors.dangerBg,
       ));
     }
     final request = _paymentLinks.takeRequest();
@@ -194,51 +193,43 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
     final provider = context.watch<WalletProvider>();
     final wallet = provider.wallet!;
 
+    final wide = MediaQuery.of(context).size.width >= S256Theme.wideLayout;
+
     return Scaffold(
-      body: Row(
-        children: [
-          // Sidebar (Desktop)
-          if (MediaQuery.of(context).size.width > 900)
-            _buildSidebar(provider),
-          
-          // Main Content
-          Expanded(
-            child: Container(
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [AppTheme.backgroundColor, AppTheme.surfaceColor],
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                ),
-              ),
+      body: GridBackground(
+        child: Row(
+          children: [
+            if (wide) _buildSidebar(provider),
+            Expanded(
               child: SafeArea(
                 child: Material(
                   color: Colors.transparent,
                   child: Column(
                     children: [
+                      StatusStrip(price: _priceData),
                       _buildTopBar(wallet, provider),
-                      // 🌐 Dynamic Global Message / Connection Banner Area
+                      // Connection banner across the panel, or a normal message
                       if (provider.message.isNotEmpty)
                         Padding(
                           padding: provider.message.contains('⚠️')
-                              ? EdgeInsets.zero // Span full width across the content panel for connection drops
-                              : const EdgeInsets.symmetric(horizontal: 24, vertical: 8), // Standard padding for actions
+                              ? EdgeInsets.zero
+                              : const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
                           child: provider.message.contains('⚠️')
                               ? Container(
                                   width: double.infinity,
-                                  color: Colors.amber.shade900,
+                                  color: S256Colors.primary,
                                   padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
                                   child: Row(
                                     mainAxisAlignment: MainAxisAlignment.center,
                                     children: [
-                                      const Icon(Icons.cloud_off_rounded, color: Colors.white, size: 20),
+                                      const Icon(Icons.cloud_off_rounded, color: S256Colors.onPrimary, size: 20),
                                       const SizedBox(width: 10),
                                       Expanded(
                                         child: Text(
                                           provider.message,
                                           style: const TextStyle(
-                                            color: Colors.white, 
-                                            fontWeight: FontWeight.bold,
+                                            color: S256Colors.onPrimary,
+                                            fontWeight: FontWeight.w600,
                                             fontSize: 14,
                                           ),
                                           textAlign: TextAlign.center,
@@ -247,7 +238,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                                     ],
                                   ),
                                 )
-                              : _buildMessage(provider.message), // Fallback to custom message styling for normal info
+                              : _buildMessage(provider.message),
                         ),
                       Expanded(
                         child: TabBarView(
@@ -266,81 +257,123 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                 ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
-      bottomNavigationBar: MediaQuery.of(context).size.width <= 900
-          ? TabBar(
-              controller: _tabController,
-              // Five tabs must fit a 360px phone without truncating labels.
-              labelPadding: EdgeInsets.zero,
-              labelStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
-              unselectedLabelStyle: const TextStyle(fontSize: 11),
-              tabs: const [
-                Tab(icon: Icon(Icons.account_balance_wallet_rounded), text: 'Assets'),
-                Tab(icon: Icon(Icons.contacts_rounded), text: 'Contacts'),
-                Tab(icon: Icon(Icons.send_rounded), text: 'Send'),
-                Tab(icon: Icon(Icons.qr_code_scanner_rounded), text: 'Receive'),
-                Tab(icon: Icon(Icons.settings_rounded), text: 'Settings'),
-              ],
-            )
-          : null,
+      bottomNavigationBar: wide
+          ? null
+          : Container(
+              decoration: const BoxDecoration(
+                color: S256Colors.darkBg,
+                border: Border(top: BorderSide(color: S256Colors.line)),
+              ),
+              child: SafeArea(
+                top: false,
+                child: TabBar(
+                  controller: _tabController,
+                  // Five tabs must fit a 360px phone without truncating labels.
+                  labelPadding: EdgeInsets.zero,
+                  labelStyle: const TextStyle(fontFamily: S256Theme.display, fontSize: 11, fontWeight: FontWeight.w600),
+                  unselectedLabelStyle: const TextStyle(fontFamily: S256Theme.display, fontSize: 11),
+                  indicatorSize: TabBarIndicatorSize.tab,
+                  // A line along the top edge, like the sidebar's marker.
+                  indicator: const BoxDecoration(
+                    color: S256Colors.glow,
+                    border: Border(top: BorderSide(color: S256Colors.primary, width: 2)),
+                  ),
+                  dividerColor: Colors.transparent,
+                  tabs: [
+                    for (final t in _tabs) Tab(icon: Icon(t.icon), text: t.label),
+                  ],
+                ),
+              ),
+            ),
     );
   }
 
+  static const _tabs = [
+    (icon: Icons.account_balance_wallet_rounded, label: 'Assets'),
+    (icon: Icons.contacts_rounded, label: 'Contacts'),
+    (icon: Icons.send_rounded, label: 'Send'),
+    (icon: Icons.qr_code_scanner_rounded, label: 'Receive'),
+    (icon: Icons.settings_rounded, label: 'Settings'),
+  ];
+
   Widget _buildSidebar(WalletProvider provider) {
-    return Material(
-      color: Colors.black.withValues(alpha: 0.2),
-      child: Container(
-        width: 280,
-        padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+    return Container(
+      width: 248,
+      decoration: const BoxDecoration(
+        color: S256Colors.darkBg,
+        border: Border(right: BorderSide(color: S256Colors.line)),
+      ),
+      child: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 24, 16, 20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                child: Row(
+                  children: [
+                    Image.asset('assets/logo.png', width: 40, height: 40),
+                    const SizedBox(width: 12),
+                    const Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        PlatinumText(
+                          'S256',
+                          style: TextStyle(fontFamily: S256Theme.display, fontSize: 24, fontWeight: FontWeight.w700, letterSpacing: 1),
+                        ),
+                        HudLabel('Web wallet v${Config.appVersion}', slashes: false, color: S256Colors.textLight),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 36),
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 8),
+                child: HudLabel('Navigation'),
+              ),
+              const SizedBox(height: 10),
+              for (var i = 0; i < _tabs.length; i++) _buildSidebarItem(i, _tabs[i].icon, _tabs[i].label),
+              const Spacer(),
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 8),
+                child: HudLabel('Support', color: S256Colors.textLight),
+              ),
+              const SizedBox(height: 6),
+              _buildSidebarLink(Icons.email_outlined, 'info@sha256coin.eu', () => _mailTo('info@sha256coin.eu')),
+              _buildSidebarLink(Icons.support_agent_rounded, 'contact@sha256coin.eu', () => _mailTo('contact@sha256coin.eu')),
+              const SizedBox(height: 12),
+              const Divider(),
+              const SizedBox(height: 4),
+              _buildSidebarLink(Icons.logout_rounded, 'Logout', provider.logout, color: S256Colors.danger),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _mailTo(String address) async {
+    final uri = Uri(scheme: 'mailto', path: address);
+    if (await canLaunchUrl(uri)) await launchUrl(uri);
+  }
+
+  Widget _buildSidebarLink(IconData icon, String label, VoidCallback onTap, {Color color = S256Colors.textLight}) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: S256Theme.borderRadius,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 9),
+        child: Row(
           children: [
-            Image.asset('assets/logo.png', height: 200),
-            const SizedBox(height: 60),
-            _buildSidebarItem(_tabAssets, Icons.account_balance_wallet_rounded, 'Assets'),
-            _buildSidebarItem(_tabContacts, Icons.contacts_rounded, 'Contacts'),
-            _buildSidebarItem(_tabSend, Icons.send_rounded, 'Send'),
-            _buildSidebarItem(_tabReceive, Icons.qr_code_scanner_rounded, 'Receive'),
-            _buildSidebarItem(_tabSettings, Icons.settings_rounded, 'Settings'),
-            const Spacer(),
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: Text('Support', style: TextStyle(color: Colors.white38, fontSize: 14)),
-            ),
-            ListTile(
-              onTap: () async {
-                final Uri emailUri = Uri(
-                  scheme: 'mailto',
-                  path: 'info@sha256coin.eu',
-                );
-                if (await canLaunchUrl(emailUri)) {
-                  await launchUrl(emailUri);
-                }
-              },
-              leading: const Icon(Icons.email_rounded, size: 18, color: Colors.white38),
-              title: const Text('info@sha256coin.eu', style: TextStyle(fontSize: 14, color: Colors.white54)),
-            ),
-            ListTile(
-              onTap: () async {
-                final Uri emailUri = Uri(
-                  scheme: 'mailto',
-                  path: 'contact@sha256coin.eu',
-                );
-                if (await canLaunchUrl(emailUri)) {
-                  await launchUrl(emailUri);
-                }
-              },
-              leading: const Icon(Icons.support_agent_rounded, size: 18, color: Colors.white38),
-              title: const Text('contact@sha256coin.eu', style: TextStyle(fontSize: 14, color: Colors.white54)),
-            ),
-            const SizedBox(height: 20),
-            ListTile(
-              onTap: provider.logout,
-              leading: const Icon(Icons.logout_rounded, color: Colors.redAccent),
-              title: const Text('Logout', style: TextStyle(color: Colors.redAccent)),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            Icon(icon, size: 16, color: color),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(label, style: TextStyle(fontSize: 13, color: color), overflow: TextOverflow.ellipsis),
             ),
           ],
         ),
@@ -349,45 +382,68 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
   }
 
   Widget _buildSidebarItem(int index, IconData icon, String label) {
-    final isSelected = _tabController.index == index;
+    final selected = _shownTab == index;
     return Padding(
-      padding: const EdgeInsets.only(bottom: 8.0),
-      child: ListTile(
-        onTap: () => setState(() => _tabController.index = index),
-        selected: isSelected,
-        leading: Icon(icon, color: isSelected ? AppTheme.primaryColor : Colors.white54),
-        title: Text(label, style: TextStyle(color: isSelected ? Colors.white : Colors.white54)),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        selectedTileColor: AppTheme.primaryColor.withValues(alpha: 0.1),
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Material(
+        color: selected ? S256Colors.glow : Colors.transparent,
+        child: InkWell(
+          onTap: () => _tabController.index = index,
+          hoverColor: S256Colors.surface2,
+          child: Container(
+            height: 44,
+            // An amber marker on the left of the selected item. No radius:
+            // Flutter cannot round a border with one coloured side.
+            decoration: BoxDecoration(
+              border: Border(
+                left: BorderSide(color: selected ? S256Colors.primary : Colors.transparent, width: 2),
+              ),
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+            child: Row(
+              children: [
+                Text(
+                  (index + 1).toString().padLeft(2, '0'),
+                  style: TextStyle(
+                    fontFamily: S256Theme.mono,
+                    fontSize: 11,
+                    color: selected ? S256Colors.primary : S256Colors.textLight.withValues(alpha: 0.6),
+                  ),
+                ),
+                const SizedBox(width: 14),
+                Icon(icon, size: 18, color: selected ? S256Colors.primary : S256Colors.textLight),
+                const SizedBox(width: 12),
+                Text(
+                  label.toUpperCase(),
+                  style: TextStyle(
+                    fontFamily: S256Theme.display,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 1.4,
+                    color: selected ? S256Colors.text : S256Colors.textLight,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
 
   Widget _buildTopBar(WalletModel wallet, WalletProvider provider) {
     return Padding(
-      padding: const EdgeInsets.all(24.0),
+      padding: const EdgeInsets.fromLTRB(24, 20, 16, 4),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                wallet.type == WalletType.seed ? 'Modern Seed Phrase Wallet' : 'Legacy WIF Wallet',
-                style: const TextStyle(color: Colors.white54, fontSize: 14),
-              ),
-              const SizedBox(height: 4),
-              Row(
-                children: [
-                  const Icon(Icons.circle, color: Colors.green, size: 8),
-                  const SizedBox(width: 8),
-                  const Text('Mainnet', style: TextStyle(fontWeight: FontWeight.bold)),
-                  const SizedBox(width: 8),
-                  const CustomEndpointBadge(),
-                ],
-              ),
-            ],
+          Expanded(
+            child: HudTitle(
+              _tabs[_shownTab].label,
+              label: wallet.type == WalletType.seed ? 'Seed phrase wallet' : 'WIF wallet',
+            ),
           ),
+          const CustomEndpointBadge(),
+          const SizedBox(width: 8),
           IconButton(
             onPressed: () {
               provider.refreshBalance();
@@ -395,6 +451,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
               _fetchPrice();
             },
             icon: const Icon(Icons.refresh_rounded),
+            color: S256Colors.textLight,
             tooltip: 'Refresh Balance',
           ),
         ],
@@ -408,19 +465,19 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
         color: message.contains('❌')
-            ? Colors.red.withValues(alpha: 0.1)
-            : Colors.green.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(12),
+            ? S256Colors.danger.withValues(alpha: 0.1)
+            : S256Colors.success.withValues(alpha: 0.1),
+        borderRadius: S256Theme.borderRadius,
         border: Border.all(
           color: message.contains('❌')
-              ? Colors.red.withValues(alpha: 0.3)
-              : Colors.green.withValues(alpha: 0.3),
+              ? S256Colors.danger.withValues(alpha: 0.3)
+              : S256Colors.success.withValues(alpha: 0.3),
         ),
       ),
       child: Text(
         message,
         style: TextStyle(
-          color: message.contains('❌') ? Colors.redAccent : Colors.greenAccent,
+          color: message.contains('❌') ? S256Colors.danger : S256Colors.success,
           fontWeight: FontWeight.w500,
         ),
         textAlign: TextAlign.center,
@@ -437,8 +494,8 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
           // ── Balance Card ────────────────────────────────────────────
           _buildBalanceCard(wallet, provider),
           const SizedBox(height: 40),
-          const Text('Your Assets', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 20),
+          const HudLabel('Your assets'),
+          const SizedBox(height: 12),
           _buildAssetItem('S256', 'SHA256 Coin', wallet.balance, 'assets/logo.png'),
           // ── Transaction History ─────────────────────────────────────
           const SizedBox(height: 40),
@@ -475,129 +532,144 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
 
   Widget _buildBalanceCard(WalletModel wallet, WalletProvider provider) {
     final isMobile = MediaQuery.of(context).size.width <= 700;
-    final balanceFontSize = isMobile ? 30.0 : 40.0;
+    final balanceFontSize = isMobile ? 36.0 : 52.0;
 
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(32),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: wallet.hasPending
-              ? [Colors.orange.shade800, Colors.orange.shade600]
-              : [AppTheme.primaryColor, AppTheme.accentColor],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
+    final balance = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const HudLabel('Wallet balance'),
+            if (wallet.hasPending) ...[
+              const SizedBox(width: 10),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: S256Colors.glow,
+                  borderRadius: S256Theme.borderRadius,
+                  border: Border.all(color: S256Colors.primary.withValues(alpha: 0.5)),
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.history_toggle_off_rounded, color: S256Colors.primary, size: 12),
+                    SizedBox(width: 6),
+                    Text(
+                      'PENDING',
+                      style: TextStyle(fontFamily: S256Theme.mono, color: S256Colors.primary, fontSize: 10, letterSpacing: 1.2),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ],
         ),
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: [
-          BoxShadow(
-            color: (wallet.hasPending ? Colors.orange : AppTheme.primaryColor).withValues(alpha: 0.3),
-            blurRadius: 30,
-            offset: const Offset(0, 15),
+        const SizedBox(height: 14),
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerLeft,
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.baseline,
+            textBaseline: TextBaseline.alphabetic,
+            children: [
+              PlatinumText(
+                wallet.totalBalance.toStringAsFixed(2),
+                style: TextStyle(
+                  fontFamily: S256Theme.display,
+                  fontSize: balanceFontSize,
+                  fontWeight: FontWeight.w700,
+                  height: 1,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Text(
+                'S256',
+                style: TextStyle(
+                  fontFamily: S256Theme.display,
+                  fontSize: balanceFontSize * 0.42,
+                  fontWeight: FontWeight.w600,
+                  color: S256Colors.primary,
+                  letterSpacing: 1,
+                ),
+              ),
+            ],
+          ),
+        ),
+        if (_priceData != null) ...[
+          const SizedBox(height: 8),
+          Text(
+            '≈ \$${(wallet.totalBalance * _priceData!.price).toStringAsFixed(2)} USD',
+            style: const TextStyle(fontFamily: S256Theme.mono, color: S256Colors.accent, fontSize: 14),
           ),
         ],
-      ),
+        if (wallet.hasPending) ...[
+          const SizedBox(height: 10),
+          Text(
+            'Confirmed: ${wallet.balance.toStringAsFixed(2)} S256',
+            style: const TextStyle(fontFamily: S256Theme.mono, color: S256Colors.textLight, fontSize: 13),
+          ),
+          const SizedBox(height: 2),
+          const Text(
+            'You have unconfirmed transactions. Please wait ~20 min for a block confirmation.',
+            style: TextStyle(color: S256Colors.textLight, fontSize: 12),
+          ),
+        ],
+      ],
+    );
+
+    final price = Tooltip(
+      message: _priceData == null
+          ? 'Price data unavailable'
+          : _priceData!.isLastTrade
+              ? 'Last traded price, not a live price:\n'
+                  'LiveCoinWatch currently sees no market trading S256'
+              : _priceData!.change24h == null
+                  ? 'Live price from LiveCoinWatch'
+                  : 'Live price from LiveCoinWatch\n'
+                      '• 24h change: ${_priceData!.change24h!.toStringAsFixed(2)}%',
+      child: _buildPricePanel(),
+    );
+
+    return HudCard(
+      brackets: true,
+      padding: EdgeInsets.all(isMobile ? 20 : 28),
+      borderColor: S256Colors.lineStrong,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Left: label + pending badge
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        const Text('Wallet Balance', style: TextStyle(color: Colors.white70, fontSize: 16)),
-                        if (wallet.hasPending) ...[
-                          const SizedBox(width: 8),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: Colors.white.withValues(alpha: 0.2),
-                              borderRadius: BorderRadius.circular(20),
-                            ),
-                            child: const Row(
-                              children: [
-                                Icon(Icons.history_toggle_off_rounded, color: Colors.white, size: 14),
-                                SizedBox(width: 6),
-                                Text(
-                                  'PENDING',
-                                  style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    FittedBox(
-                      fit: BoxFit.scaleDown,
-                      alignment: Alignment.centerLeft,
-                      child: Text(
-                        '${wallet.totalBalance.toStringAsFixed(2)} S256',
-                        maxLines: 1,
-                        softWrap: false,
-                        style: TextStyle(
-                          fontSize: balanceFontSize,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                        ),
-                      ),
-                    ),
-                    if (wallet.hasPending) ...[
-                      const SizedBox(height: 8),
-                      Text(
-                        'Confirmed: ${wallet.balance.toStringAsFixed(2)} S256',
-                        style: const TextStyle(color: Colors.white70, fontSize: 14),
-                      ),
-                      const Text(
-                        'Note: You have unconfirmed transactions.\nPlease wait ~20 min for a block confirmation.',
-                        style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w500),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-              const SizedBox(width: 12),
-              // Right: price widget
-              ClipRRect(
-                borderRadius: BorderRadius.circular(16),
-                child: Tooltip(
-                  message: _priceData == null
-                      ? 'Price data unavailable'
-                      : _priceData!.isLastTrade
-                          ? 'Last traded price, not a live price:\n'
-                              'LiveCoinWatch currently sees no market trading S256'
-                          : _priceData!.change24h == null
-                              ? 'Live price from LiveCoinWatch'
-                              : 'Live price from LiveCoinWatch\n'
-                                  '• 24h change: ${_priceData!.change24h!.toStringAsFixed(2)}%',
-                  child: _buildFloatingPriceWidget(wallet.totalBalance),
-                ),
-              ),
-            ],
-          ),
+          if (isMobile) ...[
+            balance,
+            const SizedBox(height: 16),
+            price,
+          ] else
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(child: balance),
+                const SizedBox(width: 20),
+                price,
+              ],
+            ),
           const SizedBox(height: 20),
           Builder(builder: (_) {
             final pts = _buildSparklinePoints(wallet, provider.transactions);
-            if (pts.length >= 2)
+            if (pts.length >= 2) {
               return SizedBox(
-                height: 40,
+                height: 48,
                 width: double.infinity,
                 child: CustomPaint(painter: SparklinePainter(pts)),
               );
+            }
             return const SizedBox.shrink();
           }),
-          const SizedBox(height: 16),
+          const SizedBox(height: 20),
           Row(
             children: [
-              _buildActionButton(Icons.arrow_upward_rounded, 'Send', () => _tabController.index = _tabSend, tooltip: 'Send assets to another address'),
+              _buildActionButton(Icons.arrow_upward_rounded, 'Send', () => _tabController.index = _tabSend,
+                  tooltip: 'Send assets to another address', primary: true),
               const SizedBox(width: 12),
-              _buildActionButton(Icons.arrow_downward_rounded, 'Receive', () => _tabController.index = _tabReceive, tooltip: 'Receive assets from another address'),
+              _buildActionButton(Icons.arrow_downward_rounded, 'Receive', () => _tabController.index = _tabReceive,
+                  tooltip: 'Receive assets from another address'),
             ],
           ),
         ],
@@ -605,147 +677,123 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
     );
   }
 
-  Widget _buildFloatingPriceWidget(double s256Balance) {
-    final usdBalance = _priceData != null ? s256Balance * _priceData!.price : 0.0;
-    
-    return BackdropFilter(
-      filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        decoration: BoxDecoration(
-          color: Colors.black.withValues(alpha: 0.4),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.2), width: 1),
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text(
-              'S256 Price',
-              style: TextStyle(color: Colors.white54, fontSize: 12, fontWeight: FontWeight.w500),
+  /// S256 price with its 24h change, or the date of the last trade.
+  Widget _buildPricePanel() {
+    return Container(
+      constraints: const BoxConstraints(minWidth: 180),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      decoration: BoxDecoration(
+        color: S256Colors.darkBg,
+        borderRadius: S256Theme.borderRadius,
+        border: Border.all(color: S256Colors.line),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const HudLabel('S256 / USD', slashes: false, color: S256Colors.textLight),
+          const SizedBox(height: 8),
+          if (_priceLoading && _priceData == null)
+            const SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          else if (_priceData != null) ...[
+            Text(
+              '\$${_priceData!.price.toStringAsFixed(6)}',
+              style: const TextStyle(
+                fontFamily: S256Theme.mono,
+                color: S256Colors.text,
+                fontSize: 18,
+                fontWeight: FontWeight.w500,
+              ),
             ),
-            const SizedBox(height: 4),
-            if (_priceLoading)
-              const SizedBox(
-                width: 60,
-                height: 20,
-                child: Center(
-                  child: SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white70),
-                    ),
-                  ),
-                ),
-              )
-            else if (_priceData != null)
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.center,
+            if (_priceData!.change24h case final change?) ...[
+              const SizedBox(height: 4),
+              Row(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text(
-                    '${_priceData!.price.toStringAsFixed(6)} \$',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
+                  Icon(
+                    change >= 0 ? Icons.arrow_upward_rounded : Icons.arrow_downward_rounded,
+                    color: change >= 0 ? S256Colors.success : S256Colors.danger,
+                    size: 13,
                   ),
-                  if (_priceData!.change24h case final change?) ...[
-                    const SizedBox(height: 4),
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          change >= 0 ? Icons.arrow_upward_rounded : Icons.arrow_downward_rounded,
-                          color: change >= 0 ? Colors.greenAccent : Colors.redAccent,
-                          size: 14,
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          '${change.abs().toStringAsFixed(2)} %',
-                          style: TextStyle(
-                            color: change >= 0 ? Colors.greenAccent : Colors.redAccent,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                  // Not a live price: say when it last traded
-                  if (_priceData!.isLastTrade) ...[
-                    const SizedBox(height: 4),
-                    Text(
-                      'last traded ${PriceData.formatDate(_priceData!.lastTraded!)}',
-                      style: const TextStyle(color: Colors.white54, fontSize: 11),
-                    ),
-                  ],
-                  const SizedBox(height: 8),
-                  const Divider(height: 1, color: Colors.white24),
-                  const SizedBox(height: 8),
-                  const Text(
-                    'Portfolio Value',
-                    style: TextStyle(color: Colors.white54, fontSize: 11, fontWeight: FontWeight.w500),
-                  ),
-                  const SizedBox(height: 2),
+                  const SizedBox(width: 4),
                   Text(
-                    '${usdBalance.toStringAsFixed(2)} \$',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
+                    '${change.abs().toStringAsFixed(2)}% 24H',
+                    style: TextStyle(
+                      fontFamily: S256Theme.mono,
+                      color: change >= 0 ? S256Colors.success : S256Colors.danger,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w500,
                     ),
                   ),
                 ],
-              )
-            else
-              const Text(
-                'data unavailable',
-                style: TextStyle(color: Colors.white54, fontSize: 14),
               ),
-          ],
-        ),
+            ],
+            // Not a live price: say when it last traded
+            if (_priceData!.isLastTrade) ...[
+              const SizedBox(height: 4),
+              Text(
+                'LAST TRADED ${PriceData.formatDate(_priceData!.lastTraded!).toUpperCase()}',
+                style: const TextStyle(fontFamily: S256Theme.mono, color: S256Colors.textLight, fontSize: 10.5, letterSpacing: 0.8),
+              ),
+            ],
+          ] else
+            const Text(
+              'data unavailable',
+              style: TextStyle(color: S256Colors.textLight, fontSize: 14),
+            ),
+        ],
       ),
     );
   }
 
-  Widget _buildActionButton(IconData icon, String label, VoidCallback onTap, {String? tooltip}) {
-    return Tooltip(
-      message: tooltip ?? label,
-      child: ElevatedButton.icon(
-        onPressed: onTap,
-        icon: Icon(icon, size: 18),
-        label: Text(label),
-        style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.white.withValues(alpha: 0.2),
-          foregroundColor: Colors.white,
-          elevation: 0,
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-        ),
-      ),
-    );
+  Widget _buildActionButton(IconData icon, String label, VoidCallback onTap, {String? tooltip, bool primary = false}) {
+    final button = primary
+        ? ElevatedButton.icon(
+            onPressed: onTap,
+            icon: Icon(icon, size: 18),
+            label: Text(label.toUpperCase()),
+            style: ElevatedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
+              textStyle: const TextStyle(fontFamily: S256Theme.display, fontWeight: FontWeight.w600, letterSpacing: 1.2),
+            ),
+          )
+        : OutlinedButton.icon(
+            onPressed: onTap,
+            icon: Icon(icon, size: 18),
+            label: Text(label.toUpperCase()),
+            style: OutlinedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
+              textStyle: const TextStyle(fontFamily: S256Theme.display, fontWeight: FontWeight.w600, letterSpacing: 1.2),
+            ),
+          );
+    return Tooltip(message: tooltip ?? label, child: button);
   }
 
   Widget _buildAssetItem(String symbol, String name, double balance, String iconPath) {
-    return Card(
-      child: ListTile(
-        contentPadding: const EdgeInsets.all(16),
-        leading: CircleAvatar(
-          backgroundColor: AppTheme.backgroundColor,
-          child: Padding(
-            padding: const EdgeInsets.all(8.0),
-            child: Image.asset(iconPath),
+    return HudCard(
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+      child: Row(
+        children: [
+          Image.asset(iconPath, width: 36, height: 36),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(symbol, style: const TextStyle(fontFamily: S256Theme.display, fontWeight: FontWeight.w600, fontSize: 16)),
+                Text(name, style: const TextStyle(color: S256Colors.textLight, fontSize: 13)),
+              ],
+            ),
           ),
-        ),
-        title: Text(symbol, style: const TextStyle(fontWeight: FontWeight.bold)),
-        subtitle: Text(name),
-        trailing: Text(
-          balance.toStringAsFixed(8),
-          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-        ),
+          Text(
+            balance.toStringAsFixed(8),
+            style: const TextStyle(fontFamily: S256Theme.mono, fontWeight: FontWeight.w500, fontSize: 15),
+          ),
+        ],
       ),
     );
   }
@@ -754,32 +802,32 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: Colors.orange.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: Colors.orange.withValues(alpha: 0.3)),
+        color: S256Colors.primary.withValues(alpha: 0.1),
+        borderRadius: S256Theme.borderRadius,
+        border: Border.all(color: S256Colors.primary.withValues(alpha: 0.3)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Row(
             children: [
-              Icon(Icons.auto_awesome_rounded, color: Colors.orange),
+              Icon(Icons.auto_awesome_rounded, color: S256Colors.primary),
               SizedBox(width: 12),
               Text(
                 'Migrate to Seed Phrase',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.orange),
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: S256Colors.primary),
               ),
             ],
           ),
           const SizedBox(height: 12),
           const Text(
             'You are using a legacy WIF wallet. Upgrade to a Seed Phrase wallet for better security and easier backup.',
-            style: TextStyle(color: Colors.white70),
+            style: TextStyle(color: S256Colors.textLight),
           ),
           const SizedBox(height: 20),
           ElevatedButton(
             onPressed: provider.isLoading ? null : () => _showMigrationDialog(context, provider),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.orange, foregroundColor: Colors.black),
+            style: ElevatedButton.styleFrom(backgroundColor: S256Colors.primary, foregroundColor: S256Colors.onPrimary),
             child: const Text('Start Migration (Sweep)'),
           ),
         ],
@@ -798,10 +846,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            const Text(
-              'Transaction History',
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-            ),
+            const HudLabel('Transaction history'),
             if (provider.isLoadingTxs)
               const SizedBox(
                 width: 18,
@@ -824,23 +869,23 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
             width: double.infinity,
             padding: const EdgeInsets.symmetric(vertical: 40),
             decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.04),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: Colors.white10),
+              color: S256Colors.text.withValues(alpha: 0.04),
+              borderRadius: S256Theme.borderRadius,
+              border: Border.all(color: S256Colors.line),
             ),
             child: Column(
               children: [
                 Icon(Icons.receipt_long_rounded,
-                    size: 48, color: Colors.white24),
+                    size: 48, color: S256Colors.lineStrong),
                 const SizedBox(height: 12),
                 const Text(
                   'No transactions yet',
-                  style: TextStyle(color: Colors.white38, fontSize: 15),
+                  style: TextStyle(color: S256Colors.textLight, fontSize: 15),
                 ),
                 const SizedBox(height: 4),
                 const Text(
                   'Your transaction history will appear here.',
-                  style: TextStyle(color: Colors.white24, fontSize: 13),
+                  style: TextStyle(color: S256Colors.lineStrong, fontSize: 13),
                 ),
               ],
             ),
@@ -857,8 +902,8 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                   onPressed: provider.loadMoreTransactions,
                   style: TextButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 16),
-                    backgroundColor: Colors.white.withValues(alpha: 0.05),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    backgroundColor: S256Colors.text.withValues(alpha: 0.05),
+                    shape: RoundedRectangleBorder(borderRadius: S256Theme.borderRadius),
                   ),
                   child: const Text('Load More Transactions'),
                 ),
@@ -876,8 +921,8 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
         margin: const EdgeInsets.only(bottom: 10),
         height: 72,
         decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.05),
-          borderRadius: BorderRadius.circular(14),
+          color: S256Colors.text.withValues(alpha: 0.05),
+          borderRadius: S256Theme.borderRadius,
         ),
       ),
     );
@@ -887,10 +932,10 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
     final isSent = tx.direction == TxDirection.sent;
     final isSelf = tx.direction == TxDirection.selfTransfer;
     final Color dirColor = isSelf
-        ? Colors.blueAccent
+        ? S256Colors.accent
         : isSent
-            ? Colors.redAccent
-            : Colors.greenAccent;
+            ? S256Colors.danger
+            : S256Colors.success;
     final IconData dirIcon = isSelf
         ? Icons.swap_horiz_rounded
         : isSent
@@ -920,12 +965,12 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.04),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.07)),
+        color: S256Colors.text.withValues(alpha: 0.04),
+        borderRadius: S256Theme.borderRadius,
+        border: Border.all(color: S256Colors.text.withValues(alpha: 0.07)),
       ),
       child: InkWell(
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: S256Theme.borderRadius,
         onTap: () => launchUrl(Uri.parse(explorerUrl),
             mode: LaunchMode.externalApplication),
         child: Padding(
@@ -970,9 +1015,9 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                         Text(
                           tx.shortTxid,
                           style: const TextStyle(
-                            fontFamily: 'monospace',
+                            fontFamily: S256Theme.mono,
                             fontSize: 11,
-                            color: Colors.white38,
+                            color: S256Colors.textLight,
                           ),
                         ),
                         const SizedBox(width: 6),
@@ -987,7 +1032,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                             );
                           },
                           child: const Icon(Icons.copy_rounded,
-                              size: 12, color: Colors.white24),
+                              size: 12, color: S256Colors.lineStrong),
                         ),
                       ],
                     ),
@@ -1004,21 +1049,21 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                     style: TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 13,
-                      color: isSelf ? Colors.white70 : dirColor,
+                      color: isSelf ? S256Colors.textLight : dirColor,
                     ),
                   ),
                   const SizedBox(height: 4),
                   Text(
                     timeLabel,
                     style: const TextStyle(
-                        fontSize: 11, color: Colors.white38),
+                        fontSize: 11, color: S256Colors.textLight),
                   ),
                 ],
               ),
 
               const SizedBox(width: 8),
               const Icon(Icons.open_in_new_rounded,
-                  size: 14, color: Colors.white24),
+                  size: 14, color: S256Colors.lineStrong),
             ],
           ),
         ),
@@ -1031,15 +1076,15 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
         decoration: BoxDecoration(
-          color: Colors.orange.withValues(alpha: 0.2),
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: Colors.orange.withValues(alpha: 0.4)),
+          color: S256Colors.primary.withValues(alpha: 0.2),
+          borderRadius: S256Theme.borderRadius,
+          border: Border.all(color: S256Colors.primary.withValues(alpha: 0.4)),
         ),
         child: const Text(
           'PENDING',
           style: TextStyle(
               fontSize: 9,
-              color: Colors.orange,
+              color: S256Colors.primary,
               fontWeight: FontWeight.bold),
         ),
       );
@@ -1047,14 +1092,14 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
       decoration: BoxDecoration(
-        color: Colors.green.withValues(alpha: 0.15),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.green.withValues(alpha: 0.3)),
+        color: S256Colors.success.withValues(alpha: 0.15),
+        borderRadius: S256Theme.borderRadius,
+        border: Border.all(color: S256Colors.success.withValues(alpha: 0.3)),
       ),
       child: Text(
         _formatConfirmationsLabel(tx.confirmations),
         style: const TextStyle(
-            fontSize: 9, color: Colors.greenAccent, fontWeight: FontWeight.bold),
+            fontSize: 9, color: S256Colors.success, fontWeight: FontWeight.bold),
       ),
     );
   }
@@ -1103,7 +1148,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
               ? const Text('Switch to Seed Phrase')
               : Row(
                   children: const [
-                    Icon(Icons.warning_amber_rounded, color: Colors.red),
+                    Icon(Icons.warning_amber_rounded, color: S256Colors.danger),
                     SizedBox(width: 12),
                     Expanded(child: Text('Confirm Migration')),
                   ],
@@ -1115,21 +1160,21 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                 width: double.infinity,
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: Colors.red.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.red.withValues(alpha: 0.3)),
+                  color: S256Colors.danger.withValues(alpha: 0.12),
+                  borderRadius: S256Theme.borderRadius,
+                  border: Border.all(color: S256Colors.danger.withValues(alpha: 0.3)),
                 ),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Icon(Icons.error_outline_rounded, color: Colors.redAccent),
+                    const Icon(Icons.error_outline_rounded, color: S256Colors.danger),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Text(
                         isEmpty
                             ? 'NOTICE: This will generate a NEW seed phrase. No funds will be moved. BACKUP the generated seed phrase IMMEDIATELY ! after migration.'
                             : 'WARNING: This will MOVE ALL FUNDS to a NEW address. BACKUP the generated seed phrase IMMEDIATELY ! \n This action is irreversible. If you FAIL TO BACKUP the new seed phrase, you will LOSE ACCESS to your funds FOREVER.',
-                        style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold),
+                        style: const TextStyle(color: S256Colors.danger, fontWeight: FontWeight.bold),
                       ),
                     ),
                   ],
@@ -1232,8 +1277,8 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                 }
               },
               style: ElevatedButton.styleFrom(
-                backgroundColor: isEmpty ? AppTheme.primaryColor : Colors.orange,
-                foregroundColor: isEmpty ? Colors.white : Colors.black,
+                backgroundColor: isEmpty ? S256Colors.primary : S256Colors.primary,
+                foregroundColor: isEmpty ? S256Colors.text : S256Colors.darkBg,
               ),
               child: Text(isEmpty ? 'Generate Seed Wallet' : 'Generate Seed & Sweep'),
             ),
@@ -1271,7 +1316,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
         return AlertDialog(
           title: const Row(
             children: [
-              Icon(Icons.layers_rounded, color: Colors.orangeAccent),
+              Icon(Icons.layers_rounded, color: S256Colors.primary),
               SizedBox(width: 8),
               Text('Batch Migration Required'),
             ],
@@ -1285,20 +1330,20 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                 Text(
                   reasonLabel(reason),
                   style: const TextStyle(
-                      color: Colors.orangeAccent, fontWeight: FontWeight.w700),
+                      color: S256Colors.primary, fontWeight: FontWeight.w700),
                 ),
                 const SizedBox(height: 8),
                 const Text(
                   'This migration cannot be completed safely in a single transaction. '
                   'Batch migration will split the sweep into multiple broadcasts to your new seed wallet address.',
-                  style: TextStyle(color: Colors.white70),
+                  style: TextStyle(color: S256Colors.textLight),
                 ),
                 const SizedBox(height: 10),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     const Text('Confirmed balance',
-                        style: TextStyle(color: Colors.white60, fontSize: 12)),
+                        style: TextStyle(color: S256Colors.textLight, fontSize: 12)),
                     Text('${confirmedTotal.toStringAsFixed(8)} S256'),
                   ],
                 ),
@@ -1307,7 +1352,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     const Text('Inputs to migrate',
-                        style: TextStyle(color: Colors.white60, fontSize: 12)),
+                        style: TextStyle(color: S256Colors.textLight, fontSize: 12)),
                     Text('$inputCount'),
                   ],
                 ),
@@ -1316,7 +1361,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     const Text('Estimated single tx size',
-                        style: TextStyle(color: Colors.white60, fontSize: 12)),
+                        style: TextStyle(color: S256Colors.textLight, fontSize: 12)),
                     Text('$estimatedVbytes vB'),
                   ],
                 ),
@@ -1325,7 +1370,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     const Text('Estimated batch tx count',
-                        style: TextStyle(color: Colors.white60, fontSize: 12)),
+                        style: TextStyle(color: S256Colors.textLight, fontSize: 12)),
                     Text('$estimatedBatchCount'),
                   ],
                 ),
@@ -1333,7 +1378,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                 const Text(
                   'Important: batch migration means multiple TXIDs. If a later batch fails, earlier batches may already be confirmed. '
                   'You must back up the new seed phrase immediately after migration starts.',
-                  style: TextStyle(color: Colors.orangeAccent, fontSize: 11),
+                  style: TextStyle(color: S256Colors.primary, fontSize: 11),
                 ),
               ],
             ),
@@ -1379,7 +1424,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
       } on FormatException catch (e) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text(e.message),
-          backgroundColor: Colors.red.shade800,
+          backgroundColor: S256Colors.dangerBg,
         ));
       }
     }
@@ -1435,12 +1480,12 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
         AddressBook.normalizeAddress(nameTwin.address) != request.address;
     // Skip the claimed name when it is simply the saved contact's own name.
     final showClaimedName = request.label != null && (savedContact == null || nameTwin != savedContact);
-    final accent = impersonates ? Colors.redAccent : AppTheme.primaryColor;
+    final accent = impersonates ? S256Colors.danger : S256Colors.primary;
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 12, 8, 12),
       decoration: BoxDecoration(
         color: accent.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: S256Theme.borderRadius,
         border: Border.all(color: accent.withValues(alpha: impersonates ? 0.7 : 0.3)),
       ),
       child: Row(
@@ -1448,7 +1493,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
         children: [
           const Padding(
             padding: EdgeInsets.only(top: 2),
-            child: Icon(Icons.request_quote_rounded, color: AppTheme.primaryColor),
+            child: Icon(Icons.request_quote_rounded, color: S256Colors.primary),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -1465,11 +1510,11 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                   const SizedBox(height: 4),
                   Row(
                     children: [
-                      const Icon(Icons.verified_user_rounded, size: 14, color: Colors.greenAccent),
+                      const Icon(Icons.verified_user_rounded, size: 14, color: S256Colors.success),
                       const SizedBox(width: 6),
                       Expanded(
                         child: Text('Saved contact: ${savedContact.label}',
-                            style: const TextStyle(color: Colors.greenAccent)),
+                            style: const TextStyle(color: S256Colors.success)),
                       ),
                     ],
                   ),
@@ -1477,20 +1522,20 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                 if (showClaimedName) ...[
                   const SizedBox(height: 4),
                   Text('Name given in the request (not verified): ${request.label}',
-                      style: const TextStyle(color: Colors.white70)),
+                      style: const TextStyle(color: S256Colors.textLight)),
                 ],
                 if (impersonates) ...[
                   const SizedBox(height: 6),
                   Text(
                     '⚠ This request uses the name "${nameTwin.label}", but it is NOT the address you saved '
                     'for ${nameTwin.label}. Do not pay unless you are sure who sent it.',
-                    style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.w600),
+                    style: const TextStyle(color: S256Colors.danger, fontWeight: FontWeight.w600),
                   ),
                 ],
                 if (request.message != null) ...[
                   const SizedBox(height: 4),
                   Text('Note from the requester: ${request.message}',
-                      style: const TextStyle(color: Colors.white70)),
+                      style: const TextStyle(color: S256Colors.textLight)),
                 ],
                 const SizedBox(height: 6),
                 Text(
@@ -1500,7 +1545,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                           'before sending. The note is not sent.',
                   style: TextStyle(
                     fontSize: 12,
-                    color: amountChanged ? Colors.amberAccent : Colors.white54,
+                    color: amountChanged ? S256Colors.accent : S256Colors.textLight,
                   ),
                 ),
               ],
@@ -1548,8 +1593,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text('Send Assets',
-                      style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+                  const HudLabel('Send assets'),
                   ToggleButtons(
                     isSelected: [!_advancedSend, _advancedSend],
                     onPressed: (index) {
@@ -1561,7 +1605,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                         provider.resetCoinControl();
                       }
                     },
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius: S256Theme.borderRadius,
                     children: const [
                       Padding(padding: EdgeInsets.symmetric(horizontal: 16), child: Text('Simple')),
                       Padding(padding: EdgeInsets.symmetric(horizontal: 16), child: Text('Advanced')),
@@ -1600,7 +1644,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                       else if (_addressValid != null)
                         Icon(
                           _addressValid! ? Icons.check_circle : Icons.cancel,
-                          color: _addressValid! ? Colors.green : Colors.red,
+                          color: _addressValid! ? S256Colors.success : S256Colors.danger,
                         ),
                       IconButton(
                         icon: const Icon(Icons.contacts_rounded),
@@ -1837,10 +1881,10 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                 style: ElevatedButton.styleFrom(
                     minimumSize: const Size(double.infinity, 64)),
                 child: provider.isLoading
-                    ? const CircularProgressIndicator(color: Colors.white)
-                    : const Text('Send Transaction',
+                    ? const CircularProgressIndicator(color: S256Colors.onPrimary)
+                    : const Text('SEND TRANSACTION',
                         style: TextStyle(
-                            fontSize: 18, fontWeight: FontWeight.bold)),
+                            fontFamily: S256Theme.display, fontSize: 17, fontWeight: FontWeight.w600, letterSpacing: 1.4)),
               ),
             ],
           ),
@@ -1853,10 +1897,10 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
     final byteLen = utf8.encode(_messageController.text).length;
     final over = byteLen > 80;
     final counterColor = over
-        ? Colors.redAccent
+        ? S256Colors.danger
         : byteLen > 60
-            ? Colors.amberAccent
-            : Colors.cyanAccent;
+            ? S256Colors.accent
+            : S256Colors.primary;
 
     return Container(
       padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
@@ -1865,32 +1909,32 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: [
-            Colors.cyanAccent.withValues(alpha: 0.08),
-            Colors.cyanAccent.withValues(alpha: 0.02),
+            S256Colors.primary.withValues(alpha: 0.08),
+            S256Colors.primary.withValues(alpha: 0.02),
           ],
         ),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.cyanAccent.withValues(alpha: 0.25)),
+        borderRadius: S256Theme.borderRadius,
+        border: Border.all(color: S256Colors.primary.withValues(alpha: 0.25)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              const Icon(Icons.chat_bubble_outline_rounded, color: Colors.cyanAccent, size: 16),
+              const Icon(Icons.chat_bubble_outline_rounded, color: S256Colors.primary, size: 16),
               const SizedBox(width: 6),
               const Text(
                 'On-Chain Message',
-                style: TextStyle(color: Colors.cyanAccent, fontSize: 12, fontWeight: FontWeight.w700, letterSpacing: 0.3),
+                style: TextStyle(color: S256Colors.primary, fontSize: 12, fontWeight: FontWeight.w700, letterSpacing: 0.3),
               ),
               const SizedBox(width: 8),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
                 decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(6),
+                  color: S256Colors.text.withValues(alpha: 0.08),
+                  borderRadius: S256Theme.borderRadius,
                 ),
-                child: const Text('OPTIONAL', style: TextStyle(color: Colors.white54, fontSize: 9, fontWeight: FontWeight.w600, letterSpacing: 0.5)),
+                child: const Text('OPTIONAL', style: TextStyle(color: S256Colors.textLight, fontSize: 9, fontWeight: FontWeight.w600, letterSpacing: 0.5)),
               ),
               const Spacer(),
               Text(
@@ -1909,23 +1953,23 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
               isDense: true,
               hintText: 'Say something on the blockchain forever…',
               filled: true,
-              fillColor: Colors.black.withValues(alpha: 0.22),
+              fillColor: S256Colors.darkBg.withValues(alpha: 0.22),
               contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: S256Theme.borderRadius,
                 borderSide: BorderSide.none,
               ),
               enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: S256Theme.borderRadius,
                 borderSide: BorderSide.none,
               ),
               focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-                borderSide: const BorderSide(color: Colors.cyanAccent, width: 1.5),
+                borderRadius: S256Theme.borderRadius,
+                borderSide: const BorderSide(color: S256Colors.primary, width: 1.5),
               ),
               errorBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-                borderSide: const BorderSide(color: Colors.redAccent, width: 1.2),
+                borderRadius: S256Theme.borderRadius,
+                borderSide: const BorderSide(color: S256Colors.danger, width: 1.2),
               ),
               errorText: _messageError(),
               errorStyle: const TextStyle(fontSize: 11),
@@ -1935,12 +1979,12 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Icon(Icons.info_outline_rounded, size: 12, color: Colors.white.withValues(alpha: 0.35)),
+              Icon(Icons.info_outline_rounded, size: 12, color: S256Colors.text.withValues(alpha: 0.35)),
               const SizedBox(width: 4),
               Expanded(
                 child: Text(
                   'Embedded via OP_RETURN — permanent and visible to anyone. Please keep it civil.',
-                  style: TextStyle(fontSize: 10.5, color: Colors.white.withValues(alpha: 0.4), fontStyle: FontStyle.italic),
+                  style: TextStyle(fontSize: 10.5, color: S256Colors.text.withValues(alpha: 0.4), fontStyle: FontStyle.italic),
                 ),
               ),
             ],
@@ -2113,7 +2157,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
 
   Widget _buildFeeStateBanner(WalletProvider provider) {
     final bool warning = !provider.feeRateReady;
-    final Color color = warning ? Colors.orange : Colors.green;
+    final Color color = warning ? S256Colors.primary : S256Colors.success;
     final IconData icon = warning
         ? Icons.warning_amber_rounded
         : Icons.check_circle_outline_rounded;
@@ -2122,7 +2166,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: S256Theme.borderRadius,
         border: Border.all(color: color.withValues(alpha: 0.35)),
       ),
       child: Row(
@@ -2134,7 +2178,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
               provider.feeRateStatusMessage,
               style: TextStyle(
                 fontSize: 12,
-                color: warning ? Colors.orange.shade200 : Colors.green.shade200,
+                color: warning ? S256Colors.accent : S256Colors.success,
               ),
             ),
           ),
@@ -2158,9 +2202,9 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.05),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: Colors.white24),
+        color: S256Colors.text.withValues(alpha: 0.05),
+        borderRadius: S256Theme.borderRadius,
+        border: Border.all(color: S256Colors.lineStrong),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -2170,7 +2214,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
             children: [
               const Text(
                 'Fee Source',
-                style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+                style: TextStyle(color: S256Colors.text, fontWeight: FontWeight.w600),
               ),
               Text(
                 _feeSourceLabel(provider),
@@ -2193,14 +2237,14 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                         },
                   style: OutlinedButton.styleFrom(
                     side: BorderSide(
-                      color: manualSelected ? Colors.cyanAccent : Colors.white30,
+                      color: manualSelected ? S256Colors.primary : S256Colors.textLight,
                       width: manualSelected ? 1.6 : 1.0,
                     ),
                     backgroundColor: manualSelected
-                        ? Colors.cyanAccent.withValues(alpha: 0.16)
+                        ? S256Colors.primary.withValues(alpha: 0.16)
                         : Colors.transparent,
                     foregroundColor:
-                        manualSelected ? Colors.cyanAccent : Colors.white70,
+                        manualSelected ? S256Colors.primary : S256Colors.textLight,
                     padding: const EdgeInsets.symmetric(vertical: 12),
                   ),
                   child: const Text('Manual'),
@@ -2214,14 +2258,14 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                       : () => provider.fetchFeeRate(),
                   style: OutlinedButton.styleFrom(
                     side: BorderSide(
-                      color: nodeSelected ? Colors.greenAccent : Colors.white30,
+                      color: nodeSelected ? S256Colors.success : S256Colors.textLight,
                       width: nodeSelected ? 1.6 : 1.0,
                     ),
                     backgroundColor: nodeSelected
-                        ? Colors.greenAccent.withValues(alpha: 0.14)
+                        ? S256Colors.success.withValues(alpha: 0.14)
                         : Colors.transparent,
                     foregroundColor:
-                        nodeSelected ? Colors.greenAccent : Colors.white70,
+                        nodeSelected ? S256Colors.success : S256Colors.textLight,
                     padding: const EdgeInsets.symmetric(vertical: 12),
                   ),
                   child: const Text('Auto (Node Fee)'),
@@ -2281,7 +2325,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                         error = null;
                       });
                     },
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius: S256Theme.borderRadius,
                     children: const [
                       Padding(
                         padding: EdgeInsets.symmetric(horizontal: 12),
@@ -2296,11 +2340,11 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                   const SizedBox(height: 10),
                   Text(
                     'Low traffic: ${lowSatVb.toStringAsFixed(3)} sat/vB (${lowS256KvB.toStringAsFixed(8)} S256/kvB)',
-                    style: const TextStyle(fontSize: 12, color: Colors.grey),
+                    style: const TextStyle(fontSize: 12, color: S256Colors.textLight),
                   ),
                   Text(
                     'High traffic: ${highSatVb.toStringAsFixed(3)} sat/vB (${highS256KvB.toStringAsFixed(8)} S256/kvB)',
-                    style: const TextStyle(fontSize: 12, color: Colors.grey),
+                    style: const TextStyle(fontSize: 12, color: S256Colors.textLight),
                   ),
                   const SizedBox(height: 8),
                   Row(
@@ -2424,7 +2468,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
         return AlertDialog(
           title: const Row(
             children: [
-              Icon(Icons.shield_outlined, color: Colors.cyanAccent, size: 22),
+              Icon(Icons.shield_outlined, color: S256Colors.primary, size: 22),
               SizedBox(width: 8),
               Text('Confirm Transaction'),
             ],
@@ -2437,9 +2481,9 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                 width: double.infinity,
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.05),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.white24),
+                  color: S256Colors.text.withValues(alpha: 0.05),
+                  borderRadius: S256Theme.borderRadius,
+                  border: Border.all(color: S256Colors.lineStrong),
                 ),
                 child: Text('To: $toAddress', style: const TextStyle(fontSize: 12)),
               ),
@@ -2448,13 +2492,13 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   const Text('Amount Mode',
-                      style: TextStyle(color: Colors.white60, fontSize: 12)),
+                      style: TextStyle(color: S256Colors.textLight, fontSize: 12)),
                   Text(
                     amountModeLabel,
                     style: TextStyle(
                       color: subtractFeeFromAmount
-                          ? Colors.amberAccent
-                          : Colors.greenAccent,
+                          ? S256Colors.accent
+                          : S256Colors.success,
                       fontWeight: FontWeight.w600,
                       fontSize: 12,
                     ),
@@ -2466,11 +2510,11 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   const Text('Entered Amount',
-                      style: TextStyle(color: Colors.white60, fontSize: 12)),
+                      style: TextStyle(color: S256Colors.textLight, fontSize: 12)),
                   Text(
                     '${enteredAmount.toStringAsFixed(8)} S256',
                     style: const TextStyle(
-                        color: Colors.white, fontWeight: FontWeight.w600),
+                        color: S256Colors.text, fontWeight: FontWeight.w600),
                   ),
                 ],
               ),
@@ -2479,11 +2523,11 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   const Text('Recipient Amount',
-                      style: TextStyle(color: Colors.white60, fontSize: 12)),
+                      style: TextStyle(color: S256Colors.textLight, fontSize: 12)),
                   Text(
                     '${amount.toStringAsFixed(8)} S256',
                     style: const TextStyle(
-                        color: Colors.white, fontWeight: FontWeight.w600),
+                        color: S256Colors.text, fontWeight: FontWeight.w600),
                   ),
                 ],
               ),
@@ -2492,11 +2536,11 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   const Text('Estimated Fee',
-                      style: TextStyle(color: Colors.white60, fontSize: 12)),
+                      style: TextStyle(color: S256Colors.textLight, fontSize: 12)),
                   Text(
                     '${estimatedFee.toStringAsFixed(8)} S256',
                     style: const TextStyle(
-                        color: Colors.cyanAccent, fontWeight: FontWeight.w600),
+                        color: S256Colors.primary, fontWeight: FontWeight.w600),
                   ),
                 ],
               ),
@@ -2505,11 +2549,11 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   const Text('Total Spend (est.)',
-                      style: TextStyle(color: Colors.white60, fontSize: 12)),
+                      style: TextStyle(color: S256Colors.textLight, fontSize: 12)),
                   Text(
                     '${totalSpend.toStringAsFixed(8)} S256',
                     style: const TextStyle(
-                        color: Colors.white, fontWeight: FontWeight.w600),
+                        color: S256Colors.text, fontWeight: FontWeight.w600),
                   ),
                 ],
               ),
@@ -2518,7 +2562,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   const Text('Fee Source',
-                      style: TextStyle(color: Colors.white60, fontSize: 12)),
+                      style: TextStyle(color: S256Colors.textLight, fontSize: 12)),
                   Text(
                     feeSource,
                     style: TextStyle(color: sourceColor, fontWeight: FontWeight.w600),
@@ -2529,13 +2573,13 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
               Text(
                 'Fee rate: ${provider.feeRate.toStringAsFixed(8)} S256/kvB '
                 '(${_formatSatVb(provider.feeRate)} sat/vB)',
-                style: const TextStyle(color: Colors.white70),
+                style: const TextStyle(color: S256Colors.textLight),
               ),
               if (hasSelectedInputs) ...[
                 const SizedBox(height: 6),
                 Text(
                   'Selected inputs: ${provider.selectedUtxoCount}',
-                  style: const TextStyle(color: Colors.white70),
+                  style: const TextStyle(color: S256Colors.textLight),
                 ),
               ],
               if (message != null && message.isNotEmpty) ...[
@@ -2544,19 +2588,19 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                   width: double.infinity,
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: Colors.amberAccent.withValues(alpha: 0.08),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.amberAccent.withValues(alpha: 0.4)),
+                    color: S256Colors.accent.withValues(alpha: 0.08),
+                    borderRadius: S256Theme.borderRadius,
+                    border: Border.all(color: S256Colors.accent.withValues(alpha: 0.4)),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const Text(
                         'Message (permanent & public on-chain)',
-                        style: TextStyle(color: Colors.amberAccent, fontSize: 11, fontWeight: FontWeight.w600),
+                        style: TextStyle(color: S256Colors.accent, fontSize: 11, fontWeight: FontWeight.w600),
                       ),
                       const SizedBox(height: 4),
-                      Text(message, style: const TextStyle(color: Colors.white, fontSize: 13)),
+                      Text(message, style: const TextStyle(color: S256Colors.text, fontSize: 13)),
                     ],
                   ),
                 ),
@@ -2593,7 +2637,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
         return AlertDialog(
           title: const Row(
             children: [
-              Icon(Icons.check_circle, color: Colors.greenAccent, size: 24),
+              Icon(Icons.check_circle, color: S256Colors.success, size: 24),
               SizedBox(width: 8),
               Text('Transaction Sent'),
             ],
@@ -2606,14 +2650,14 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                 width: double.infinity,
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                 decoration: BoxDecoration(
-                  color: Colors.green.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.green.withValues(alpha: 0.35)),
+                  color: S256Colors.success.withValues(alpha: 0.12),
+                  borderRadius: S256Theme.borderRadius,
+                  border: Border.all(color: S256Colors.success.withValues(alpha: 0.35)),
                 ),
                 child: const Text(
                   'Broadcasted to network',
                   style: TextStyle(
-                    color: Colors.greenAccent,
+                    color: S256Colors.success,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -2623,11 +2667,11 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   const Text('Amount Sent',
-                      style: TextStyle(color: Colors.white54, fontSize: 12)),
+                      style: TextStyle(color: S256Colors.textLight, fontSize: 12)),
                   Text(
                     '${amount.toStringAsFixed(8)} S256',
                     style: const TextStyle(
-                        color: Colors.white, fontWeight: FontWeight.w600),
+                        color: S256Colors.text, fontWeight: FontWeight.w600),
                   ),
                 ],
               ),
@@ -2636,11 +2680,11 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   const Text('Network Fee Paid',
-                      style: TextStyle(color: Colors.white54, fontSize: 12)),
+                      style: TextStyle(color: S256Colors.textLight, fontSize: 12)),
                   Text(
                     '${fee.toStringAsFixed(8)} S256',
                     style: const TextStyle(
-                        color: Colors.cyanAccent, fontWeight: FontWeight.w600),
+                        color: S256Colors.primary, fontWeight: FontWeight.w600),
                   ),
                 ],
               ),
@@ -2648,22 +2692,22 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                 const SizedBox(height: 12),
                 const Text('TXID',
                     style:
-                        TextStyle(color: Colors.white60, fontWeight: FontWeight.w600)),
+                        TextStyle(color: S256Colors.textLight, fontWeight: FontWeight.w600)),
                 const SizedBox(height: 4),
                 Container(
                   width: double.infinity,
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: Colors.black,
-                    borderRadius: BorderRadius.circular(6),
-                    border: Border.all(color: Colors.white24),
+                    color: S256Colors.darkBg,
+                    borderRadius: S256Theme.borderRadius,
+                    border: Border.all(color: S256Colors.lineStrong),
                   ),
                   child: SelectableText(
                     txid,
                     style: const TextStyle(
                         fontSize: 12,
-                        fontFamily: 'monospace',
-                        color: Colors.cyanAccent),
+                        fontFamily: S256Theme.mono,
+                        color: S256Colors.primary),
                   ),
                 ),
                 const SizedBox(height: 4),
@@ -2734,7 +2778,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
         return AlertDialog(
           title: const Row(
             children: [
-              Icon(Icons.layers_rounded, color: Colors.orangeAccent),
+              Icon(Icons.layers_rounded, color: S256Colors.primary),
               SizedBox(width: 8),
               Text('Batch Send Suggested'),
             ],
@@ -2748,20 +2792,20 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                 Text(
                   reasonLabel(reason),
                   style: const TextStyle(
-                      color: Colors.orangeAccent, fontWeight: FontWeight.w700),
+                      color: S256Colors.primary, fontWeight: FontWeight.w700),
                 ),
                 const SizedBox(height: 8),
                 const Text(
                   'This transfer may exceed safe single-transaction limits. '
                   'You can batch it into multiple broadcasts or continue with normal send.',
-                  style: TextStyle(color: Colors.white70),
+                  style: TextStyle(color: S256Colors.textLight),
                 ),
                 const SizedBox(height: 12),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     const Text('Requested amount',
-                        style: TextStyle(color: Colors.white60, fontSize: 12)),
+                        style: TextStyle(color: S256Colors.textLight, fontSize: 12)),
                     Text('${amount.toStringAsFixed(8)} S256'),
                   ],
                 ),
@@ -2770,7 +2814,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     const Text('Predicted inputs',
-                        style: TextStyle(color: Colors.white60, fontSize: 12)),
+                        style: TextStyle(color: S256Colors.textLight, fontSize: 12)),
                     Text('$predictedInputs'),
                   ],
                 ),
@@ -2779,7 +2823,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     const Text('Predicted tx size',
-                        style: TextStyle(color: Colors.white60, fontSize: 12)),
+                        style: TextStyle(color: S256Colors.textLight, fontSize: 12)),
                     Text('$predictedVbytes vB'),
                   ],
                 ),
@@ -2788,7 +2832,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     const Text('Estimated batch count',
-                        style: TextStyle(color: Colors.white60, fontSize: 12)),
+                        style: TextStyle(color: S256Colors.textLight, fontSize: 12)),
                     Text('$estimatedBatchCount'),
                   ],
                 ),
@@ -2797,7 +2841,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     const Text('Est. single fee',
-                        style: TextStyle(color: Colors.white60, fontSize: 12)),
+                        style: TextStyle(color: S256Colors.textLight, fontSize: 12)),
                     Text('${estimatedSingleFee.toStringAsFixed(8)} S256'),
                   ],
                 ),
@@ -2806,7 +2850,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     const Text('Est. total batch fee',
-                        style: TextStyle(color: Colors.white60, fontSize: 12)),
+                        style: TextStyle(color: S256Colors.textLight, fontSize: 12)),
                     Text('${estimatedTotalBatchFee.toStringAsFixed(8)} S256'),
                   ],
                 ),
@@ -2815,20 +2859,20 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     const Text('Est. net delivered',
-                        style: TextStyle(color: Colors.white60, fontSize: 12)),
+                        style: TextStyle(color: S256Colors.textLight, fontSize: 12)),
                     Text('${estimatedNetDelivered.toStringAsFixed(8)} S256'),
                   ],
                 ),
                 const SizedBox(height: 8),
                 const Text(
                   'Estimates may vary depending on final input selection and mempool conditions.',
-                  style: TextStyle(color: Colors.white38, fontSize: 11),
+                  style: TextStyle(color: S256Colors.textLight, fontSize: 11),
                 ),
                 if (!usingManualFee) ...[
                   const SizedBox(height: 8),
                   const Text(
                     'You are currently using node-estimated fee. For batch sends, consider setting a manual fee first for more predictable total cost.',
-                    style: TextStyle(color: Colors.orangeAccent, fontSize: 11),
+                    style: TextStyle(color: S256Colors.primary, fontSize: 11),
                   ),
                 ],
               ],
@@ -2882,7 +2926,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
         return AlertDialog(
           title: const Row(
             children: [
-              Icon(Icons.warning_amber_rounded, color: Colors.orangeAccent),
+              Icon(Icons.warning_amber_rounded, color: S256Colors.primary),
               SizedBox(width: 8),
               Text('Normal Send Failed'),
             ],
@@ -2893,16 +2937,16 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
             children: [
               const Text(
                 'This failure may be caused by single-transaction size or mempool constraints.',
-                style: TextStyle(color: Colors.white70),
+                style: TextStyle(color: S256Colors.textLight),
               ),
               const SizedBox(height: 8),
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.05),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.white24),
+                  color: S256Colors.text.withValues(alpha: 0.05),
+                  borderRadius: S256Theme.borderRadius,
+                  border: Border.all(color: S256Colors.lineStrong),
                 ),
                 child: Text(message, style: const TextStyle(fontSize: 12)),
               ),
@@ -3003,7 +3047,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   SelectableText(address,
-                      style: const TextStyle(fontFamily: 'monospace', fontSize: 13, color: Colors.white70)),
+                      style: const TextStyle(fontFamily: S256Theme.mono, fontSize: 13, color: S256Colors.textLight)),
                   const SizedBox(height: 16),
                   TextField(
                     controller: labelController,
@@ -3044,7 +3088,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
         return AlertDialog(
           title: const Row(
             children: [
-              Icon(Icons.fact_check_rounded, color: Colors.greenAccent, size: 24),
+              Icon(Icons.fact_check_rounded, color: S256Colors.success, size: 24),
               SizedBox(width: 8),
               Text('Batch Send Complete'),
             ],
@@ -3057,13 +3101,13 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
               children: [
                 Text(
                   'Broadcasted ${txids.length} transaction${txids.length == 1 ? '' : 's'}.',
-                  style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.w600),
+                  style: const TextStyle(color: S256Colors.success, fontWeight: FontWeight.w600),
                 ),
                 const SizedBox(height: 8),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text('Requested Amount', style: TextStyle(color: Colors.white54, fontSize: 12)),
+                    const Text('Requested Amount', style: TextStyle(color: S256Colors.textLight, fontSize: 12)),
                     Text('${requestedAmount.toStringAsFixed(8)} S256', style: const TextStyle(fontWeight: FontWeight.w600)),
                   ],
                 ),
@@ -3071,7 +3115,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text('Gross Sent', style: TextStyle(color: Colors.white54, fontSize: 12)),
+                    const Text('Gross Sent', style: TextStyle(color: S256Colors.textLight, fontSize: 12)),
                     Text('${displayedGross.toStringAsFixed(8)} S256', style: const TextStyle(fontWeight: FontWeight.w600)),
                   ],
                 ),
@@ -3079,35 +3123,35 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text('Total Fee Paid', style: TextStyle(color: Colors.white54, fontSize: 12)),
-                    Text('${totalFee.toStringAsFixed(8)} S256', style: const TextStyle(color: Colors.cyanAccent, fontWeight: FontWeight.w600)),
+                    const Text('Total Fee Paid', style: TextStyle(color: S256Colors.textLight, fontSize: 12)),
+                    Text('${totalFee.toStringAsFixed(8)} S256', style: const TextStyle(color: S256Colors.primary, fontWeight: FontWeight.w600)),
                   ],
                 ),
                 const SizedBox(height: 6),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text('Estimated Net Delivered', style: TextStyle(color: Colors.white54, fontSize: 12)),
+                    const Text('Estimated Net Delivered', style: TextStyle(color: S256Colors.textLight, fontSize: 12)),
                     Text('${displayedNet.toStringAsFixed(8)} S256', style: const TextStyle(fontWeight: FontWeight.w600)),
                   ],
                 ),
                 if (txids.isNotEmpty) ...[
                   const SizedBox(height: 12),
-                  const Text('Batch TXIDs', style: TextStyle(color: Colors.white60, fontWeight: FontWeight.w600)),
+                  const Text('Batch TXIDs', style: TextStyle(color: S256Colors.textLight, fontWeight: FontWeight.w600)),
                   const SizedBox(height: 4),
                   Container(
                     width: double.infinity,
                     constraints: const BoxConstraints(maxHeight: 180),
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      color: Colors.black,
-                      borderRadius: BorderRadius.circular(6),
-                      border: Border.all(color: Colors.white24),
+                      color: S256Colors.darkBg,
+                      borderRadius: S256Theme.borderRadius,
+                      border: Border.all(color: S256Colors.lineStrong),
                     ),
                     child: SingleChildScrollView(
                       child: SelectableText(
                         txids.join('\n'),
-                        style: const TextStyle(fontSize: 12, fontFamily: 'monospace', color: Colors.cyanAccent),
+                        style: const TextStyle(fontSize: 12, fontFamily: S256Theme.mono, color: S256Colors.primary),
                       ),
                     ),
                   ),
@@ -3166,16 +3210,16 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
   Color _feeSourceColor(WalletProvider provider) {
     switch (provider.feeRateSource) {
       case 'manual':
-        return Colors.cyanAccent;
+        return S256Colors.primary;
       case 'estimated':
-        return Colors.greenAccent;
+        return S256Colors.success;
       case 'clamped':
       case 'baseline':
-        return Colors.orangeAccent;
+        return S256Colors.primary;
       case 'fetching':
-        return Colors.amberAccent;
+        return S256Colors.accent;
       default:
-        return Colors.redAccent;
+        return S256Colors.danger;
     }
   }
 
@@ -3197,7 +3241,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
           children: [
             CircularProgressIndicator(),
             SizedBox(height: 12),
-            Text('Scanning UTXOs...', style: TextStyle(color: Colors.grey)),
+            Text('Scanning UTXOs...', style: TextStyle(color: S256Colors.textLight)),
           ],
         ),
       );
@@ -3208,7 +3252,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
         padding: EdgeInsets.all(32),
         child: Center(
           child: Text('No confirmed UTXOs found.',
-              style: TextStyle(color: Colors.grey)),
+              style: TextStyle(color: S256Colors.textLight)),
         ),
       );
     }
@@ -3245,14 +3289,14 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
             margin: const EdgeInsets.only(bottom: 8),
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
             decoration: BoxDecoration(
-              color: Colors.orange.withValues(alpha: 0.08),
-              border: Border.all(color: Colors.orange.withValues(alpha: 0.4)),
-              borderRadius: BorderRadius.circular(8),
+              color: S256Colors.primary.withValues(alpha: 0.08),
+              border: Border.all(color: S256Colors.primary.withValues(alpha: 0.4)),
+              borderRadius: S256Theme.borderRadius,
             ),
             child: Text(
               'Showing top ${provider.availableUtxos.length} inputs by amount. '
               '${provider.coinControlTruncatedCount} smaller input(s) are hidden for performance.',
-              style: const TextStyle(color: Colors.orangeAccent, fontSize: 12),
+              style: const TextStyle(color: S256Colors.primary, fontSize: 12),
             ),
           ),
 
@@ -3265,13 +3309,13 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   margin: const EdgeInsets.only(bottom: 8),
                   decoration: BoxDecoration(
-                    color: Colors.amber.withValues(alpha: 0.1),
-                    border: Border.all(color: Colors.amber.withValues(alpha: 0.4)),
-                    borderRadius: BorderRadius.circular(8),
+                    color: S256Colors.primary.withValues(alpha: 0.1),
+                    border: Border.all(color: S256Colors.primary.withValues(alpha: 0.4)),
+                    borderRadius: S256Theme.borderRadius,
                   ),
                   child: Row(
                     children: [
-                      const Icon(Icons.check_circle_outline, size: 16, color: Colors.amber),
+                      const Icon(Icons.check_circle_outline, size: 16, color: S256Colors.primary),
                       const SizedBox(width: 8),
                       Text(
                         '${provider.selectedUtxoCount} input${provider.selectedUtxoCount > 1 ? 's' : ''}'
@@ -3288,7 +3332,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
           decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.05),
+            color: S256Colors.text.withValues(alpha: 0.05),
             borderRadius: const BorderRadius.only(
               topLeft: Radius.circular(8),
               topRight: Radius.circular(8),
@@ -3296,10 +3340,10 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
           ),
           child: Row(
             children: const [
-              SizedBox(width: 32, child: Text('#', style: TextStyle(fontSize: 12, color: Colors.grey))),
-              Expanded(flex: 3, child: Text('TXID : vout', style: TextStyle(fontSize: 12, color: Colors.grey))),
-              Expanded(flex: 2, child: Text('Amount', style: TextStyle(fontSize: 12, color: Colors.grey), textAlign: TextAlign.right)),
-              SizedBox(width: 52, child: Text('Conf', style: TextStyle(fontSize: 12, color: Colors.grey), textAlign: TextAlign.center)),
+              SizedBox(width: 32, child: Text('#', style: TextStyle(fontSize: 12, color: S256Colors.textLight))),
+              Expanded(flex: 3, child: Text('TXID : vout', style: TextStyle(fontSize: 12, color: S256Colors.textLight))),
+              Expanded(flex: 2, child: Text('Amount', style: TextStyle(fontSize: 12, color: S256Colors.textLight), textAlign: TextAlign.right)),
+              SizedBox(width: 52, child: Text('Conf', style: TextStyle(fontSize: 12, color: S256Colors.textLight), textAlign: TextAlign.center)),
               SizedBox(width: 36),
             ],
           ),
@@ -3327,10 +3371,10 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
                     decoration: BoxDecoration(
                       color: isSelected
-                          ? Colors.amber.withValues(alpha: 0.07)
-                          : (i.isOdd ? Colors.white.withValues(alpha: 0.02) : Colors.transparent),
+                          ? S256Colors.primary.withValues(alpha: 0.07)
+                          : (i.isOdd ? S256Colors.text.withValues(alpha: 0.02) : Colors.transparent),
                       border: Border(
-                        bottom: BorderSide(color: Colors.white.withValues(alpha: 0.05)),
+                        bottom: BorderSide(color: S256Colors.text.withValues(alpha: 0.05)),
                       ),
                     ),
                     child: Row(
@@ -3338,13 +3382,13 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                         SizedBox(
                           width: 32,
                           child: Text('${i + 1}',
-                              style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                              style: const TextStyle(fontSize: 12, color: S256Colors.textLight)),
                         ),
                         Expanded(
                           flex: 3,
                           child: Text(
                             txidShort,
-                            style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
+                            style: const TextStyle(fontSize: 12, fontFamily: S256Theme.mono),
                           ),
                         ),
                         Expanded(
@@ -3361,7 +3405,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                             _formatCompactConfirmationCount(
                               (utxo['confirmations'] as num?)?.toInt() ?? 0,
                             ),
-                            style: const TextStyle(fontSize: 12, color: Colors.grey),
+                            style: const TextStyle(fontSize: 12, color: S256Colors.textLight),
                             textAlign: TextAlign.center,
                           ),
                         ),
@@ -3404,12 +3448,12 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
           ? 'Amount-aware estimate using ~${simpleEstimate.inputCount ?? 1} input(s)'
           : 'Simple mode estimate using ~${simpleEstimate.inputCount ?? 2} input(s)';
     final detailsColor = hasExactCoinControlFee
-      ? Colors.greenAccent
+      ? S256Colors.success
       : _advancedSend
-        ? Colors.amberAccent
+        ? S256Colors.accent
         : simpleEstimate.amountAware
-          ? Colors.white70
-          : Colors.white54;
+          ? S256Colors.textLight
+          : S256Colors.textLight;
 
     if (fee <= 0) return const SizedBox.shrink();
 
@@ -3434,7 +3478,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
         padding: EdgeInsets.only(top: 6, left: 4),
         child: Text(
           'Fetching fee estimate...',
-          style: TextStyle(fontSize: 12, color: Colors.grey),
+          style: TextStyle(fontSize: 12, color: S256Colors.textLight),
         ),
       );
     }
@@ -3442,35 +3486,35 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.05),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.white10),
+        color: S256Colors.text.withValues(alpha: 0.05),
+        borderRadius: S256Theme.borderRadius,
+        border: Border.all(color: S256Colors.line),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
             'Estimated Network Fee',
-            style: TextStyle(color: Colors.white70, fontSize: 11),
+            style: TextStyle(color: S256Colors.textLight, fontSize: 11),
           ),
           const SizedBox(height: 2),
           Text(
             '${fee.toStringAsFixed(8)} S256',
             style: const TextStyle(
-              color: Colors.white,
+              color: S256Colors.text,
               fontSize: 16,
               fontWeight: FontWeight.w700,
             ),
           ),
           const SizedBox(height: 8),
-          const Divider(height: 1, color: Colors.white12),
+          const Divider(height: 1, color: S256Colors.line),
           const SizedBox(height: 8),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               const Text(
                 'Fee Source',
-                style: TextStyle(color: Colors.white54, fontSize: 12),
+                style: TextStyle(color: S256Colors.textLight, fontSize: 12),
               ),
               Text(
                 sourceText,
@@ -3488,7 +3532,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
             children: [
               const Text(
                 'Fee Rate',
-                style: TextStyle(color: Colors.white54, fontSize: 12),
+                style: TextStyle(color: S256Colors.textLight, fontSize: 12),
               ),
               Expanded(
                 child: Text(
@@ -3506,17 +3550,17 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
               children: [
                 Text(
                   netRowLabel,
-                  style: TextStyle(color: Colors.white54, fontSize: 12),
+                  style: TextStyle(color: S256Colors.textLight, fontSize: 12),
                 ),
                 Text(
                   netAfterFeeText,
-                  style: const TextStyle(color: Colors.greenAccent, fontSize: 12),
+                  style: const TextStyle(color: S256Colors.success, fontSize: 12),
                 ),
               ],
             ),
           ],
           const SizedBox(height: 8),
-          const Divider(height: 1, color: Colors.white12),
+          const Divider(height: 1, color: S256Colors.line),
           const SizedBox(height: 8),
           Text(
             detailsLabel,
@@ -3561,28 +3605,28 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.05),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.white10),
+        color: S256Colors.text.withValues(alpha: 0.05),
+        borderRadius: S256Theme.borderRadius,
+        border: Border.all(color: S256Colors.line),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
             'Transaction Preview',
-            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+            style: TextStyle(color: S256Colors.text, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 8),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               const Text('Selected Inputs',
-                  style: TextStyle(color: Colors.white60, fontSize: 12)),
+                  style: TextStyle(color: S256Colors.textLight, fontSize: 12)),
               Text(
                 hasSelectedInputs
                     ? '${_satsToS256(selectedInputsSats).toStringAsFixed(8)} S256'
                     : 'Auto',
-                style: const TextStyle(color: Colors.white, fontSize: 12),
+                style: const TextStyle(color: S256Colors.text, fontSize: 12),
               ),
             ],
           ),
@@ -3591,10 +3635,10 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               const Text('Recipient Amount',
-                  style: TextStyle(color: Colors.white60, fontSize: 12)),
+                  style: TextStyle(color: S256Colors.textLight, fontSize: 12)),
               Text(
                 '${_satsToS256(sendAmountSats).toStringAsFixed(8)} S256',
-                style: const TextStyle(color: Colors.white, fontSize: 12),
+                style: const TextStyle(color: S256Colors.text, fontSize: 12),
               ),
             ],
           ),
@@ -3604,10 +3648,10 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 const Text('Entered Total (includes fee)',
-                    style: TextStyle(color: Colors.white60, fontSize: 12)),
+                    style: TextStyle(color: S256Colors.textLight, fontSize: 12)),
                 Text(
                   '${enteredAmount.toStringAsFixed(8)} S256',
-                  style: const TextStyle(color: Colors.white, fontSize: 12),
+                  style: const TextStyle(color: S256Colors.text, fontSize: 12),
                 ),
               ],
             ),
@@ -3617,10 +3661,10 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               const Text('Estimated Fee',
-                  style: TextStyle(color: Colors.white60, fontSize: 12)),
+                  style: TextStyle(color: S256Colors.textLight, fontSize: 12)),
               Text(
                 '${fee.toStringAsFixed(8)} S256',
-                style: const TextStyle(color: Colors.white, fontSize: 12),
+                style: const TextStyle(color: S256Colors.text, fontSize: 12),
               ),
             ],
           ),
@@ -3629,10 +3673,10 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               const Text('Total Spend (est.)',
-                  style: TextStyle(color: Colors.white60, fontSize: 12)),
+                  style: TextStyle(color: S256Colors.textLight, fontSize: 12)),
               Text(
                 '${_satsToS256(totalSpendSats).toStringAsFixed(8)} S256',
-                style: const TextStyle(color: Colors.white, fontSize: 12),
+                style: const TextStyle(color: S256Colors.text, fontSize: 12),
               ),
             ],
           ),
@@ -3641,7 +3685,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               const Text('Fee Source',
-                  style: TextStyle(color: Colors.white60, fontSize: 12)),
+                  style: TextStyle(color: S256Colors.textLight, fontSize: 12)),
               Text(
                 _feeSourceLabel(provider),
                 style: TextStyle(color: _feeSourceColor(provider), fontSize: 12),
@@ -3653,10 +3697,10 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               const Text('Fee Rate',
-                  style: TextStyle(color: Colors.white60, fontSize: 12)),
+                  style: TextStyle(color: S256Colors.textLight, fontSize: 12)),
               Text(
                 '${provider.feeRate.toStringAsFixed(8)} S256/kvB (${_formatSatVb(provider.feeRate)} sat/vB)',
-                style: const TextStyle(color: Colors.white, fontSize: 12),
+                style: const TextStyle(color: S256Colors.text, fontSize: 12),
               ),
             ],
           ),
@@ -3665,10 +3709,10 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               const Text('Expected Change',
-                  style: TextStyle(color: Colors.white60, fontSize: 12)),
+                  style: TextStyle(color: S256Colors.textLight, fontSize: 12)),
               Text(
                 '${_satsToS256(expectedChangeSats > 0 ? expectedChangeSats : 0).toStringAsFixed(8)} S256',
-                style: const TextStyle(color: Colors.white, fontSize: 12),
+                style: const TextStyle(color: S256Colors.text, fontSize: 12),
               ),
             ],
           ),
@@ -3694,9 +3738,9 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.04),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.white12),
+        color: S256Colors.text.withValues(alpha: 0.04),
+        borderRadius: S256Theme.borderRadius,
+        border: Border.all(color: S256Colors.line),
       ),
       child: Row(
         children: [
@@ -3706,12 +3750,12 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
               children: [
                 Text(
                   'Subtract Fee From Amount',
-                  style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600),
+                  style: TextStyle(color: S256Colors.text, fontSize: 12, fontWeight: FontWeight.w600),
                 ),
                 SizedBox(height: 2),
                 Text(
                   'ON: entered amount is total spend cap. OFF: recipient gets full entered amount.',
-                  style: TextStyle(color: Colors.white54, fontSize: 11),
+                  style: TextStyle(color: S256Colors.textLight, fontSize: 11),
                 ),
               ],
             ),
@@ -3726,7 +3770,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
             Text(
               'Net ${effectiveAmount > 0 ? effectiveAmount.toStringAsFixed(8) : '-'}',
               style: TextStyle(
-                color: effectiveAmount > 0 ? Colors.greenAccent : Colors.redAccent,
+                color: effectiveAmount > 0 ? S256Colors.success : S256Colors.danger,
                 fontSize: 11,
                 fontWeight: FontWeight.w600,
               ),
@@ -3765,13 +3809,14 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
           constraints: const BoxConstraints(maxWidth: 600),
           child: Column(
             children: [
-              const Text('Receive S256', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 32),
+              const HudLabel('Receive S256'),
+              const SizedBox(height: 24),
               Container(
                 padding: const EdgeInsets.all(24),
                 decoration: BoxDecoration(
+                  // Pure white behind the QR code so every scanner reads it.
                   color: Colors.white,
-                  borderRadius: BorderRadius.circular(24),
+                  borderRadius: S256Theme.borderRadius,
                 ),
                 child: QrImageView(
                   data: isRequest ? request.toUri() : wallet.address,
@@ -3783,21 +3828,21 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                 isRequest
                     ? 'Payment request for ${amountSats == null ? 'any amount' : '${PaymentRequest.formatAmount(amountSats)} S256'}'
                     : 'Scan to pay this address',
-                style: const TextStyle(color: Colors.white54),
+                style: const TextStyle(color: S256Colors.textLight),
               ),
               const SizedBox(height: 28),
-              const Text('Your Address', style: TextStyle(color: Colors.white54)),
+              const Text('Your Address', style: TextStyle(color: S256Colors.textLight)),
               const SizedBox(height: 8),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                 decoration: BoxDecoration(
-                  color: Colors.black.withValues(alpha: 0.2),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.white10),
+                  color: S256Colors.darkBg.withValues(alpha: 0.2),
+                  borderRadius: S256Theme.borderRadius,
+                  border: Border.all(color: S256Colors.line),
                 ),
                 child: SelectableText(
                   wallet.address,
-                  style: const TextStyle(fontFamily: 'monospace', fontSize: 16),
+                  style: const TextStyle(fontFamily: S256Theme.mono, fontSize: 16),
                 ),
               ),
               const SizedBox(height: 12),
@@ -3818,7 +3863,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                       const SizedBox(height: 4),
                       const Text(
                         'Add an amount and a note, then share the QR code, the link or the text.',
-                        style: TextStyle(color: Colors.white54, fontSize: 13),
+                        style: TextStyle(color: S256Colors.textLight, fontSize: 13),
                       ),
                       const SizedBox(height: 16),
                       TextField(
@@ -3885,7 +3930,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                         const Text(
                           'The link opens the S256 web wallet with this request filled in. '
                           'The note is only shown to the payer; it is not stored on the blockchain.',
-                          style: TextStyle(color: Colors.white38, fontSize: 12),
+                          style: TextStyle(color: S256Colors.textLight, fontSize: 12),
                         ),
                       ],
                     ],
@@ -3900,11 +3945,15 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
   }
 
   Widget _buildSettingsTab(WalletProvider provider) {
-    return ListView(
-      padding: const EdgeInsets.all(24),
+    // Centred and no wider than 760px, like the other tabs.
+    return LayoutBuilder(builder: (context, constraints) => ListView(
+      padding: EdgeInsets.symmetric(
+        vertical: 24,
+        horizontal: constraints.maxWidth > 808 ? (constraints.maxWidth - 760) / 2 : 24,
+      ),
       children: [
-        const Text('Settings', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
-        const SizedBox(height: 32),
+        const HudLabel('Preferences'),
+        const SizedBox(height: 16),
         ListTile(
           onTap: () => Navigator.push(
             context,
@@ -3921,7 +3970,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
           subtitle: provider.usingCustomEndpoint
               ? Text(
                   'Custom server: ${provider.rpcHostLabel}',
-                  style: const TextStyle(color: Colors.orangeAccent),
+                  style: const TextStyle(color: S256Colors.primary),
                 )
               : const Text('Default server'),
           trailing: const Icon(Icons.chevron_right_rounded),
@@ -3965,36 +4014,37 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
         const Divider(),
         ListTile(
           onTap: () => launchUrl(Uri.parse('https://sha256coin.eu/')),
-          leading: const Icon(Icons.language_rounded, color: AppTheme.primaryColor),
+          leading: const Icon(Icons.language_rounded, color: S256Colors.primary),
           title: const Text('Official Website'),
           subtitle: const Text('sha256coin.eu'),
-          trailing: const Icon(Icons.open_in_new_rounded, size: 14, color: Colors.white24),
+          trailing: const Icon(Icons.open_in_new_rounded, size: 14, color: S256Colors.lineStrong),
         ),
         const Divider(),
         ListTile(
           onTap: () => launchUrl(Uri.parse('https://explorer.sha256coin.eu/')),
-          leading: const Icon(Icons.search_rounded, color: AppTheme.primaryColor),
+          leading: const Icon(Icons.search_rounded, color: S256Colors.primary),
           title: const Text('Block Explorer'),
           subtitle: const Text('Check transactions and blocks'),
-          trailing: const Icon(Icons.open_in_new_rounded, size: 14, color: Colors.white24),
+          trailing: const Icon(Icons.open_in_new_rounded, size: 14, color: S256Colors.lineStrong),
         ),
         const Divider(),
         const SizedBox(height: 40),
         ElevatedButton(
           onPressed: provider.logout,
-          style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent.withValues(alpha: 0.1), foregroundColor: Colors.redAccent),
+          style: ElevatedButton.styleFrom(backgroundColor: S256Colors.danger.withValues(alpha: 0.1), foregroundColor: S256Colors.danger),
           child: const Text('Logout & Clear Session'),
         ),
         const SizedBox(height: 10),
         const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 16),
-              child: Text('S256 Web-Wallet version ${Config.appVersion} - Powered by SHA256 Coin Core', 
-              style: TextStyle(color: Colors.white54, fontSize: 12),
-              textAlign: TextAlign.center
-        ),      
-       ),
+          padding: EdgeInsets.symmetric(horizontal: 16),
+          child: Text(
+            'S256 WEB WALLET v${Config.appVersion} · POWERED BY SHA256 COIN CORE',
+            style: TextStyle(color: S256Colors.textLight, fontSize: 11, fontFamily: S256Theme.mono, letterSpacing: 1.2),
+            textAlign: TextAlign.center,
+          ),
+        ),
       ],
-    );
+    ));
   }
 
   void _showBackupDialog(BuildContext context, WalletProvider provider) {
@@ -4007,7 +4057,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('CRITICAL: Never share these with anyone!', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+            const Text('CRITICAL: Never share these with anyone!', style: TextStyle(color: S256Colors.danger, fontWeight: FontWeight.bold)),
             const SizedBox(height: 20),
             if (wallet.type == WalletType.seed) ...[
               Row(
@@ -4027,13 +4077,13 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(color: Colors.black26, borderRadius: BorderRadius.circular(8)),
-                child: SelectableText(wallet.mnemonic ?? 'N/A', style: const TextStyle(fontFamily: 'monospace')),
+                decoration: BoxDecoration(color: S256Colors.darkBg, borderRadius: S256Theme.borderRadius),
+                child: SelectableText(wallet.mnemonic ?? 'N/A', style: const TextStyle(fontFamily: S256Theme.mono)),
               ),
               const SizedBox(height: 12),
               const Text(
                 'The Seed Phrase above recovers your entire wallet, including all future addresses.',
-                style: TextStyle(color: Colors.white54, fontSize: 12, fontStyle: FontStyle.italic),
+                style: TextStyle(color: S256Colors.textLight, fontSize: 12, fontStyle: FontStyle.italic),
               ),
               const SizedBox(height: 20),
             ],
@@ -4054,14 +4104,14 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(color: Colors.black26, borderRadius: BorderRadius.circular(8)),
-              child: SelectableText(wallet.privateKey, style: const TextStyle(fontFamily: 'monospace')),
+              decoration: BoxDecoration(color: S256Colors.darkBg, borderRadius: S256Theme.borderRadius),
+              child: SelectableText(wallet.privateKey, style: const TextStyle(fontFamily: S256Theme.mono)),
             ),
             if (wallet.type == WalletType.seed) ...[
               const SizedBox(height: 12),
               const Text(
                 'This WIF key is derived from your seed and controls ONLY the current address. The Seed Phrase is the primary backup.',
-                style: TextStyle(color: Colors.white54, fontSize: 12, fontStyle: FontStyle.italic),
+                style: TextStyle(color: S256Colors.textLight, fontSize: 12, fontStyle: FontStyle.italic),
               ),
             ],
           ],
@@ -4086,7 +4136,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
               if (missingSecret)
                 const Text(
                   'SESSION_ENCRYPTION_SECRET_HEX is missing in your dart defines. Add a 64-char hex key before enabling this feature.',
-                  style: TextStyle(color: Colors.orangeAccent, fontWeight: FontWeight.bold),
+                  style: TextStyle(color: S256Colors.primary, fontWeight: FontWeight.bold),
                 ),
               if (missingSecret) const SizedBox(height: 12),
               const Text('What this does:'),
