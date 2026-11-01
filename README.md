@@ -1,6 +1,6 @@
 # S256 Coin Web-Wallet
 
-![Version](https://img.shields.io/badge/release-v2.9-1f6feb)
+![Version](https://img.shields.io/badge/release-v3.0.1-1f6feb)
 
 A modern, secure, non-custodial web wallet for the SHA256 Coin network. Private keys remain client-side and transactions are signed locally in the browser.
 
@@ -20,13 +20,24 @@ A modern, secure, non-custodial web wallet for the SHA256 Coin network. Private 
 
 ## Current Version
 
-- **Release:** `v2.9`
-- **Package Version:** `2.9.0` (see `pubspec.yaml`)
+- **Release:** `v3.0.1`
+- **Package Version:** `3.0.1` (see `pubspec.yaml`)
 - **Release Notes:** `CHANGELOG.MD`
 
-## Release Highlights (v2.9)
+## Release Highlights (v3.0.1)
 
-This release adds an address book and payment requests, shared with the S256 Android wallet.
+- **Balance chart:** taller, with time along the bottom, a stepped line, gridlines with values, green and red markers for coins in and out, and a crosshair with date, balance and change. The values between the first and last point are now correct (it walks back from the confirmed balance, newest first).
+- **Network screen:** block height, hashrate, difficulty and peers as large figures, with the connection status and the server in use at the top.
+
+Earlier highlights (v3.0):
+
+- **New look ("Digital Platinum"):** matches sha256coin.eu, the explorer and the Android wallet. Dark theme only, bundled fonts (nothing loaded from Google), and a status line with connection, block height, hashrate, peers, price and server.
+- **Faster send:** a wallet with many UTXOs no longer makes one `gettxout` call per UTXO; the script comes from the `scantxoutset` answer.
+- **Price from the explorer:** no API key in the app; the last traded price is shown with its date when no market trades S256.
+
+Earlier highlights (v2.9):
+
+This release added an address book and payment requests, shared with the S256 Android wallet.
 
 - **Address book:** a Contacts tab with search, a contact picker in Send, and `.s256` import/export compatible with the Android wallet.
 - **Payment requests:** the Receive tab makes a `sha256coin:` QR code or a link that opens the wallet with the Send form filled in. The name in a request is shown as not verified, and a request that borrows a saved contact's name gets a warning.
@@ -73,7 +84,8 @@ For full version history and details, see `CHANGELOG.MD`.
 - **Address Book & Payment Requests:** saved contacts (`.s256` import/export) and `sha256coin:` request QR codes and links.
 - **Server Connection:** use the default RPC proxy or your own.
 - **Network Visibility:** integrated network info and health metrics.
-- **Price Tracking:** in-app S256/USD price display.
+- **Balance Chart:** stepped balance history with transaction markers and a hover/touch readout.
+- **Price Tracking:** in-app S256/USD price display, from the explorer.
 
 ## Security Warning
 
