@@ -292,6 +292,8 @@ class WalletProvider with ChangeNotifier {
     final restored = await _restoreWalletFromPersistentSession(type, value);
 
     if (restored) {
+      // Sliding expiry: every successful restore gives another full TTL.
+      _persistCurrentSession();
       _message = '✅ Wallet restored.';
       notifyListeners();
 

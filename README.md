@@ -1,6 +1,6 @@
 # S256 Coin Web-Wallet
 
-![Version](https://img.shields.io/badge/release-v3.0.1-1f6feb)
+![Version](https://img.shields.io/badge/release-v3.1.0-1f6feb)
 
 A modern, secure, non-custodial web wallet for the SHA256 Coin network. Private keys remain client-side and transactions are signed locally in the browser.
 
@@ -20,11 +20,15 @@ A modern, secure, non-custodial web wallet for the SHA256 Coin network. Private 
 
 ## Current Version
 
-- **Release:** `v3.0.1`
-- **Package Version:** `3.0.1` (see `pubspec.yaml`)
+- **Release:** `v3.1.0`
+- **Package Version:** `3.1.0` (see `pubspec.yaml`)
 - **Release Notes:** `CHANGELOG.MD`
 
-## Release Highlights (v3.0.1)
+## Release Highlights (v3.1.0)
+
+- **Remembered wallet:** the 7 days now count from the last time you opened the wallet, not from when you switched it on.
+
+Earlier highlights (v3.0.1):
 
 - **Balance chart:** taller, with time along the bottom, a stepped line, gridlines with values, green and red markers for coins in and out, and a crosshair with date, balance and change. The values between the first and last point are now correct (it walks back from the confirmed balance, newest first).
 - **Network screen:** block height, hashrate, difficulty and peers as large figures, with the connection status and the server in use at the top.

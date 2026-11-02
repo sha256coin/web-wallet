@@ -4,6 +4,12 @@ All notable changes to this project are documented in this file.
 
 The format is inspired by Keep a Changelog and this project follows semantic versioning for release tags.
 
+## [3.1.0] - 2026-11-02
+
+### Changed
+
+- "Remember Wallet On This Device" now expires 7 days after you last opened the wallet, not 7 days after you switched it on. Every time the remembered wallet is restored, the 7 days start again.
+
 ## [3.0.1] - 2026-10-31
 
 ### Changed
