@@ -1,0 +1,59 @@
+name: Deploy S256 Web Wallet
+
+on:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - '**.md'
+      - '**.MD'
+      - 'LICENSE'
+  workflow_dispatch:
+
+# Two deploys at once would rsync over each other.
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.47.8
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Test
+        run: flutter test
+
+      # Same value as the local build, or remembered sessions stop decrypting.
+      - name: Write build defines
+        env:
+          SESSION_ENCRYPTION_SECRET_HEX: ${{ secrets.SESSION_ENCRYPTION_SECRET_HEX }}
+        run: |
+          jq -n --arg s "$SESSION_ENCRYPTION_SECRET_HEX" '{SESSION_ENCRYPTION_SECRET_HEX: $s}' > dart_defines.json
+
+      - name: Build web
+        run: flutter build web --release --base-href "/web-wallet/" --dart-define-from-file=dart_defines.json
+
+      # The deploy key on the VPS is limited to rsync inside /home/janos/web-wallet
+      # (rrsync), so the remote path is relative to that folder.
+      - name: Deploy via rsync
+        uses: Burnett01/rsync-deployments@7.0.1
+        with:
+          switches: -avzr --delete
+          path: build/web/
+          remote_path: /
+          remote_host: ${{ secrets.VPS_IP }}
+          remote_user: ${{ secrets.VPS_USER }}
+          remote_key: ${{ secrets.VPS_SSH_KEY }}
+          remote_port: ${{ secrets.VPS_PORT }}
