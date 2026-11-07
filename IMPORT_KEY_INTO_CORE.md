@@ -1,6 +1,6 @@
 # Importing a private key from the S256 Web-Wallet into S256 Core
 
-Status: the `wpkh` import (`s21` address) has been tested on S256 Core with a descriptor wallet and the GUI console. The `pkh` variant for `S` addresses has not been tested.
+Status: the `wpkh` import (`s21` address) has been tested on S256 Core with a descriptor wallet and the GUI console. Sending from the imported wallet (change address) was tested on regtest on 2026-11-07. The `pkh` variant for `S` addresses has not been tested.
 
 This guide shows how to move a key you exported from the S256 mobile or web wallet into S256 Core. Core creates descriptor wallets, so the older `importprivkey` command does not work. You use `importdescriptors` instead.
 
@@ -8,7 +8,7 @@ This guide shows how to move a key you exported from the S256 mobile or web wall
 > - **Never share your private key or seed phrase with anyone.** Not in a chat, not with a person offering help, not on a website. Anyone who sees it can take your coins.
 > - **Test with a small amount first.**
 > - **Use a new, blank wallet for the import,** not your main Core wallet. A key added to a descriptor wallet cannot be removed later.
-> - Anything you type in the console may stay in its history. When you are finished, move the funds (step 7) and restart Core.
+> - Anything you type in the console may stay in its history. When you are finished, move the funds (step 8) and restart Core.
 > - This is a community guide, provided as is. No support is offered, and you are responsible for your own funds.
 
 ## What you need
@@ -21,11 +21,13 @@ This guide shows how to move a key you exported from the S256 mobile or web wall
 
 Type the commands in the Core console (Window > Console), or use `sha256coin-cli -rpcwallet=importtest <command>`.
 
-**1. Create a new blank wallet that can hold private keys**
+**1. Create a new wallet that can hold private keys**
 
 ```
-createwallet "importtest" false true
+createwallet "importtest"
 ```
+
+Do not make it blank (`createwallet "importtest" false true`). A blank wallet has no keys of its own, and then Core cannot create a change address: sending fails with `Transaction needs a change address, but we can't generate it. Error: No bech32 addresses available.` A single imported key cannot be set as the active (change) descriptor, because only ranged descriptors can be active. A normal wallet generates its own change keys, so sending works.
 
 **2. Check that you are using it**
 
@@ -77,7 +79,18 @@ getaddressinfo <your address from the app>
 
 `ismine` should be `true` and the balance should match the wallet.
 
-**7. Move the funds to a wallet only you control**
+**7. Sending from this wallet**
+
+In a normal wallet, sending works as usual. Change goes to a new address of this wallet's own keys, not to your imported address. So this wallet now holds funds under two kinds of keys: back it up (Core menu: File > Backup Wallet) and protect it with `encryptwallet`.
+
+If you made a blank wallet before reading this and sending fails with the change-address error, you do not have to start over. Either:
+
+- in the GUI, set a **custom change address**, for example your imported address. The change then comes back to the same address, as in the mobile wallet. Coin control is hidden by default: first tick Settings > Options > Wallet > "Enable coin control features" (restart if asked). Then on the Send tab click "Inputs..." and tick "Custom change address", or
+- import the same key into a new non-blank wallet as above.
+
+The `sendall` command in step 8 needs no change address either.
+
+**8. Move the funds to a wallet only you control**
 
 The key was typed into a console, so treat it as exposed. Send everything to a new address in a Core wallet you have protected with a passphrase (`encryptwallet`), or to a wallet you create fresh:
 
@@ -95,6 +108,7 @@ Wait for a confirmation and check the balance at the new address. Then run `unlo
 | Checksum error | You used the checksum from the `"descriptor"` line, or you changed the key after generating it. Run `getdescriptorinfo` again. |
 | `getdescriptorinfo` reports an invalid key | The exported key is not in WIF format for S256 (the S256 WIF prefix is `0xBF`). |
 | Import succeeds but the balance is zero | The rescan is still running, the node is not fully synced, the node is pruned, or the address type is wrong. Run `deriveaddresses` on the public descriptor and compare it with your address. |
+| `Transaction needs a change address, but we can't generate it` / `No bech32 addresses available` when sending | The wallet was created blank. Use a non-blank wallet (step 1), or set a custom change address in coin control (step 7). |
 | `ismine` is `false` | The descriptor type does not match your address. Try the other type. |
 
 ## Notes
